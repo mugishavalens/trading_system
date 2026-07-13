@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,6 +19,12 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 START_TIME = datetime.datetime.utcnow()
 
 
+def _log(msg: str) -> None:
+    # Explicit flush: if the process is killed abruptly (OOM, etc.), buffered
+    # stdout can be lost entirely, hiding exactly where startup got to.
+    print(msg, flush=True)
+
+
 def run_migrations() -> None:
     alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     alembic_cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
@@ -27,10 +34,19 @@ def run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_migrations()
-    seed_admin_user()
-    seed_ai_config()
-    task = asyncio.create_task(autopilot_loop())
+    try:
+        _log("[startup] running migrations...")
+        run_migrations()
+        _log("[startup] migrations complete")
+        seed_admin_user()
+        _log("[startup] admin user seeded")
+        seed_ai_config()
+        _log("[startup] ai config seeded")
+        task = asyncio.create_task(autopilot_loop())
+        _log("[startup] autopilot task started, startup complete")
+    except Exception:
+        _log("[startup] FAILED:\n" + traceback.format_exc())
+        raise
     try:
         yield
     finally:
