@@ -97,45 +97,66 @@ appears in the sidebar.
 
 The backend needs a host that runs a persistent Python process — Netlify only
 serves static sites/serverless functions, so it can host the frontend but not
-FastAPI. Fastest free path:
+FastAPI. Current setup: **Railway** for the backend, **Netlify** for the
+frontend.
 
-**1. Backend → Render**
+**1. Backend → Railway**
 
-1. Go to [render.com](https://dashboard.render.com), sign in with GitHub, and
-   pick **New → Blueprint**, selecting this repo. Render reads `render.yaml`
-   at the repo root and creates the service automatically.
-2. It'll prompt you for the two secrets marked `sync: false`: set
-   `ADMIN_PASSWORD` to something you control, and leave `ANTHROPIC_API_KEY`
-   blank unless you have one (the app works fine without it).
-3. Deploy. Once live, copy the service URL Render gives you, e.g.
-   `https://ai-trading-mentor-backend.onrender.com`.
-4. In Render's dashboard → your service → **Environment**, update
-   `CORS_ORIGINS` to include your Netlify URL once you have it (comma
-   separated, no spaces), e.g.
-   `https://your-site.netlify.app,http://localhost:3000`.
+1. Go to [railway.app](https://railway.app), sign in with GitHub, **New
+   Project → Deploy from GitHub repo**, pick this repo
+   (`mugishavalens/trading_system`).
+2. Open the new service → **Settings** → set **Root Directory** to `backend`.
+   Leave the build settings alone — Railway auto-detects Python via
+   `requirements.txt` and reads `backend/.python-version` (pinned to 3.11.9)
+   automatically.
+3. Still in **Settings**, set **Start Command** to:
+   `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Go to the **Variables** tab and add:
+   ```
+   JWT_SECRET=<any random string, e.g. generate one with `openssl rand -hex 32`>
+   DATABASE_URL=sqlite:///./trading_demo.db
+   ADMIN_EMAIL=admin@aitradingmentor.demo
+   ADMIN_PASSWORD=<pick something you control>
+   ADMIN_FULL_NAME=Platform Admin
+   CORS_ORIGINS=https://trade-with-ai.netlify.app,http://localhost:3000
+   ```
+   (Leave `ANTHROPIC_API_KEY` unset — it's optional.)
+5. Deploy. Once it's running, go to **Settings → Networking → Public
+   Networking** and click **Generate Domain** — Railway doesn't assign a
+   public URL automatically. You'll get something like
+   `https://ai-trading-mentor-backend-production.up.railway.app`.
+6. Verify it's actually up: `curl https://<your-railway-url>/api/health`
+   should return `{"status":"ok",...}`.
 
-Free tier notes: the service spins down after inactivity, so the first
-request after idling takes ~30-50s to wake up — normal for a demo, just don't
-be alarmed by it live. The SQLite database also resets on redeploy (fine for
-a demo; swap `DATABASE_URL` for a real Postgres instance later if you need
-data to persist).
+The SQLite database resets on redeploy (fine for a demo; swap `DATABASE_URL`
+for a real Postgres instance later if you need data to persist).
 
 **2. Frontend → Netlify**
 
 1. In Netlify, **Add new site → Import an existing project**, pick this repo.
    `netlify.toml` at the repo root already tells Netlify to build from
    `frontend/` — you shouldn't need to touch the build settings.
-2. Before the first deploy (or after, then redeploy), go to **Site
-   configuration → Environment variables** and add:
-   `NEXT_PUBLIC_API_URL = https://ai-trading-mentor-backend.onrender.com`
-   (your actual Render URL from step 1).
-3. Deploy. Once you have the Netlify URL, go back to Render and finish step 4
-   above so the backend accepts requests from it (otherwise you'll see CORS
-   errors in the browser console on login/register).
+2. **Site configuration → Environment variables** → add
+   `NEXT_PUBLIC_API_URL = https://<your-railway-url>` (from step 1.6 above).
+3. **Deploys → Trigger deploy → Deploy site** (env var changes need a
+   redeploy to take effect on existing sites).
 
-That's the whole loop: Render URL → Netlify env var → Netlify URL → Render
-env var. Once both sides know about each other, register a fresh account and
-walk through the dashboard live.
+Once both sides know about each other (Railway's `CORS_ORIGINS` includes the
+Netlify URL, Netlify's `NEXT_PUBLIC_API_URL` points at Railway), register a
+fresh account and walk through the dashboard live.
+
+<details>
+<summary>Render (previous attempt, kept for reference)</summary>
+
+`render.yaml` at the repo root still exists from an earlier attempt at
+deploying the backend on Render. That path hit a couple of
+platform-specific issues along the way (Render defaulting to an
+incompatible Python version, then a startup crash that was still being
+diagnosed when the Railway path was chosen instead). It's not the
+currently recommended path, but the config is left in place in case it's
+worth revisiting later.
+
+</details>
 
 ## Not built yet
 
