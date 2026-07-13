@@ -1,25 +1,34 @@
 import datetime
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
 from .models import User, UserRole
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# Calling bcrypt directly rather than through passlib's CryptContext: passlib
+# 1.7.4 runs a legacy self-test ("detect_wrap_bug") against the bcrypt backend
+# the first time it's used, and that self-test has caused hard-to-diagnose
+# crashes on some platforms/bcrypt builds. bcrypt's own API is stable and
+# maintained, so there's nothing to gain from the passlib compatibility layer
+# here.
+_BCRYPT_MAX_BYTES = 72
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    truncated = password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return bcrypt.hashpw(truncated, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    truncated = plain.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return bcrypt.checkpw(truncated, hashed.encode("utf-8"))
 
 
 def create_access_token(subject: str) -> str:
