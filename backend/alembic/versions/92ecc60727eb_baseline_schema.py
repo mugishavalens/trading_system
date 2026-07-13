@@ -28,7 +28,6 @@ def upgrade() -> None:
         sa.Column('experience_level', sa.String(20), nullable=False, server_default='beginner'),
         sa.Column('risk_profile', sa.String(20), nullable=False, server_default='moderate'),
         sa.Column('cash_balance', sa.Float(), nullable=False, server_default='100000.0'),
-        sa.Column('auto_trade_enabled', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
