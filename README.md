@@ -12,24 +12,40 @@ external API keys required.
   default). JWT auth with roles (`user`/`admin`) and account suspension, a
   synthetic OHLCV market data generator (BTC/USD, ETH/USD, SOL/USD, AAPL,
   TSLA), a technical-indicator engine (RSI/MACD/EMA/SMA/Bollinger/ATR), a
-  rule-based AI decision engine (BUY/SELL/HOLD + confidence + reasons), an
-  optional Claude-powered plain-English explainer and chat tutor (both fall
-  back to templates/FAQ if no API key is set), paper-trading + portfolio
-  endpoints with equity history snapshots, and an admin router (user
-  management, platform stats, AI performance by symbol).
+  rule-based AI decision engine with **live-tunable weights/thresholds**
+  (BUY/SELL/HOLD + confidence + reasons), an optional Claude-powered
+  plain-English explainer and chat tutor (both fall back to templates/FAQ if
+  no API key is set), paper-trading + portfolio endpoints with equity history
+  snapshots, a synthetic news feed with sentiment/impact scoring, a public
+  contact endpoint, and an **AI Autopilot background loop** — an in-process
+  asyncio task (started from the FastAPI lifespan) that trades on behalf of
+  any user who's opted in.
 - **frontend/** — Next.js (App Router) + TypeScript + Tailwind, dark
   navy/amber theme:
-  - Landing page, multi-step register, login.
+  - Landing page (with About and Contact), multi-step register, login —
+    admins and regular users are routed to entirely separate areas on login.
   - **Dashboard** — live candlestick chart, AI recommendation card ("Explain
-    Decision" / "Let AI Execute"), manual buy/sell, positions, trade history.
+    Decision" / "Let AI Execute"), manual buy/sell, positions, trade history,
+    and an AI Autopilot status banner.
   - **Markets** — all symbols with live sparklines; click through to trade.
   - **Portfolio** — equity curve, allocation breakdown, full trade history.
   - **AI Assistant** — chat tutor for trading concepts.
-  - **Learn** — short lessons with quizzes; progress tracked in
-    `localStorage`.
-  - **Admin Panel** (`/admin`, role-gated) — platform-wide stats, AI
-    performance by symbol, user management (suspend/reactivate, promote to
-    admin, delete).
+  - **Learn** — lessons grouped into Fundamentals/Indicators/Strategies tabs
+    with quizzes; progress tracked in `localStorage`.
+  - **News** — synthetic sentiment-scored headlines per symbol.
+  - **Settings** — profile/risk-profile editing, password change, and the
+    **AI Autopilot toggle** (with a plain-English explanation of exactly what
+    it does).
+  - **Admin Panel** (`/admin`, role-gated, no trading UI at all) — platform
+    stats, AI performance by symbol, user management (suspend/reactivate,
+    promote, delete), **AI Settings** (tune the indicator weights and
+    autopilot confidence floor live), **Activity Log** (every trade,
+    platform-wide), and **Messages** (Contact Us submissions).
+
+Admin accounts are strictly for platform management: they hold no demo cash,
+can't place trades (enforced server-side, not just hidden in the UI), and are
+redirected away from the trading dashboard entirely. If you want to trade,
+log in with (or register) a regular user account instead.
 
 ## Running it
 
@@ -123,6 +139,5 @@ walk through the dashboard live.
 
 ## Not built yet
 
-Deliberately out of scope for now: the strategy library, news/sentiment
-ingestion, and backtesting (the sidebar shows News/Settings as disabled
-placeholders). Add them incrementally on top of this base.
+Deliberately out of scope for now: the strategy library and backtesting.
+Add them incrementally on top of this base.
