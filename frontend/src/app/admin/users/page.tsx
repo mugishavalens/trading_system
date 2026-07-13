@@ -5,22 +5,32 @@ import clsx from "clsx";
 import { ShieldCheck, Trash2, UserX, UserCheck } from "lucide-react";
 import { api, AdminUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import FilterBar from "@/components/FilterBar";
 
 export default function AdminUsersPage() {
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [role, setRole] = useState("");
+  const [status, setStatus] = useState("");
 
   async function load() {
     if (!token) return;
-    setUsers(await api.adminUsers(token));
+    setUsers(await api.adminUsers(token, { search, role, status }));
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!token) return;
+    let cancelled = false;
+    api.adminUsers(token, { search, role, status }).then((data) => {
+      if (!cancelled) setUsers(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, search, role, status]);
 
   async function withBusy(id: number, fn: () => Promise<void>) {
     setError(null);
@@ -42,6 +52,17 @@ export default function AdminUsersPage() {
         <p className="mt-1 text-sm text-muted">
           Manage accounts, classify by their onboarding choices, promote admins, or suspend access.
         </p>
+      </div>
+
+      <div className="mt-4">
+        <FilterBar
+          search={{ value: search, onChange: setSearch, placeholder: "Search by name or email..." }}
+          selects={[
+            { key: "role", label: "Role", value: role, onChange: setRole, options: [{ value: "user", label: "User" }, { value: "admin", label: "Admin" }] },
+            { key: "status", label: "Status", value: status, onChange: setStatus, options: [{ value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }] },
+          ]}
+          onClear={() => { setSearch(""); setRole(""); setStatus(""); }}
+        />
       </div>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}

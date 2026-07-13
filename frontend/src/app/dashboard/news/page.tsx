@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react";
 import { api, NewsItem } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -19,6 +19,11 @@ const SENTIMENT_ICON: Record<string, typeof TrendingUp> = {
 };
 
 type Filter = "all" | "positive" | "negative" | "neutral";
+
+function realNewsUrl(assetName: string): string {
+  const query = encodeURIComponent(`${assetName} news`);
+  return `https://news.google.com/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
+}
 
 export default function NewsPage() {
   const { token } = useAuth();
@@ -97,6 +102,15 @@ export default function NewsPage() {
                 <span>Impact score {item.impact_score}/10</span>
                 <span>{new Date(item.published_at).toLocaleString()}</span>
               </div>
+              <a
+                href={realNewsUrl(item.asset_name)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center gap-1.5 text-xs text-accent hover:underline"
+              >
+                <ExternalLink size={12} />
+                See real {item.asset_name} coverage (opens in a new tab)
+              </a>
             </div>
           );
         })}

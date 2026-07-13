@@ -1,21 +1,34 @@
 import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from .. import autopilot
 from ..ai_config_service import get_ai_config
+from ..ai_engine import build_recommendation
+from ..config import settings
 from ..database import get_db
+from ..market_data import SYMBOLS
 from ..models import ContactMessage, Trade, User, UserRole
 from ..portfolio_service import compute_equity
 from ..schemas import (
+    AdminAnalyticsResponse,
+    AdminHealthResponse,
     AdminStatsResponse,
     AdminTradeResponse,
     AdminUserResponse,
     AIEngineConfigResponse,
     AIEngineConfigUpdateRequest,
+    AiQueryRequest,
+    AiQueryResponse,
     AIPerformanceResponse,
+    AutopilotStatusResponse,
     ContactMessageResponse,
+    DateCount,
+    MarketSummaryResponse,
     SymbolPerformance,
+    SymbolVolume,
 )
 from ..security import get_current_admin
 
@@ -48,9 +61,25 @@ def _get_target_user(db: Session, user_id: int) -> User:
 
 @router.get("/users", response_model=list[AdminUserResponse])
 def list_users(
-    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+    search: str | None = None,
+    role: str | None = None,
+    status: str | None = None,  # "active" | "suspended"
+    offset: int = 0,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
 ):
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    query = db.query(User)
+    if search:
+        like = f"%{search}%"
+        query = query.filter((User.full_name.ilike(like)) | (User.email.ilike(like)))
+    if role:
+        query = query.filter(User.role == role)
+    if status == "active":
+        query = query.filter(User.is_active.is_(True))
+    elif status == "suspended":
+        query = query.filter(User.is_active.is_(False))
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
     return [_to_admin_user_response(db, u) for u in users]
 
 
@@ -186,16 +215,39 @@ def get_ai_performance(
 
 @router.get("/activity", response_model=list[AdminTradeResponse])
 def get_activity(
+    symbol: str | None = None,
+    side: str | None = None,
+    source: str | None = None,
+    user: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    offset: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
+    query = db.query(Trade, User.email).join(User, Trade.user_id == User.id)
+    if symbol:
+        query = query.filter(Trade.symbol == symbol)
+    if side:
+        query = query.filter(Trade.side == side)
+    if source:
+        query = query.filter(Trade.source == source)
+    if user:
+        query = query.filter(User.email.ilike(f"%{user}%"))
+    if date_from:
+        try:
+            query = query.filter(Trade.executed_at >= datetime.date.fromisoformat(date_from))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_from must be YYYY-MM-DD")
+    if date_to:
+        try:
+            end = datetime.date.fromisoformat(date_to) + datetime.timedelta(days=1)
+            query = query.filter(Trade.executed_at < end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_to must be YYYY-MM-DD")
     trades = (
-        db.query(Trade, User.email)
-        .join(User, Trade.user_id == User.id)
-        .order_by(Trade.executed_at.desc())
-        .limit(limit)
-        .all()
+        query.order_by(Trade.executed_at.desc()).offset(offset).limit(limit).all()
     )
     return [
         AdminTradeResponse(
@@ -255,6 +307,208 @@ def reset_ai_engine_config(
     db.commit()
     db.refresh(config)
     return config
+
+
+@router.post("/ai-config/pause", response_model=AIEngineConfigResponse)
+def pause_autopilot(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    config = get_ai_config(db)
+    config.autopilot_paused = True
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@router.post("/ai-config/resume", response_model=AIEngineConfigResponse)
+def resume_autopilot(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    config = get_ai_config(db)
+    config.autopilot_paused = False
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@router.get("/health", response_model=AdminHealthResponse)
+def get_health(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    try:
+        db.execute(text("SELECT 1"))
+        database_ok = True
+    except Exception:
+        database_ok = False
+
+    config = get_ai_config(db)
+    autopilot_status = AutopilotStatusResponse(
+        paused=config.autopilot_paused,
+        last_run_at=autopilot.status.last_run_at,
+        last_trades_placed=autopilot.status.last_trades_placed,
+        last_trades_proposed=autopilot.status.last_trades_proposed,
+        last_error=autopilot.status.last_error,
+        run_interval_seconds=autopilot.RUN_INTERVAL_SECONDS,
+    )
+    overall = "ok" if database_ok and autopilot.status.last_error is None else "degraded"
+    return AdminHealthResponse(status=overall, database_ok=database_ok, autopilot=autopilot_status)
+
+
+@router.get("/analytics", response_model=AdminAnalyticsResponse)
+def get_analytics(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    users = db.query(User).all()
+    signup_counts: dict[str, int] = {}
+    for u in users:
+        day = u.created_at.date().isoformat()
+        signup_counts[day] = signup_counts.get(day, 0) + 1
+    signups_by_day = [
+        DateCount(date=day, count=count) for day, count in sorted(signup_counts.items())
+    ]
+
+    trades_query = db.query(Trade)
+    if date_from:
+        try:
+            trades_query = trades_query.filter(
+                Trade.executed_at >= datetime.date.fromisoformat(date_from)
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_from must be YYYY-MM-DD")
+    if date_to:
+        try:
+            end = datetime.date.fromisoformat(date_to) + datetime.timedelta(days=1)
+            trades_query = trades_query.filter(Trade.executed_at < end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_to must be YYYY-MM-DD")
+
+    symbol_counts: dict[str, int] = {}
+    for t in trades_query.all():
+        symbol_counts[t.symbol] = symbol_counts.get(t.symbol, 0) + 1
+    top_symbols = sorted(
+        (SymbolVolume(symbol=s, trade_count=c) for s, c in symbol_counts.items()),
+        key=lambda x: x.trade_count,
+        reverse=True,
+    )
+    return AdminAnalyticsResponse(signups_by_day=signups_by_day, top_symbols=top_symbols)
+
+
+MARKET_SUMMARY_SYSTEM_PROMPT = """You are an AI market analyst inside a DEMO paper-trading \
+platform's admin dashboard. You'll be given the current rule-based technical signal \
+(BUY/SELL/HOLD, confidence, risk) for each tracked symbol. Rules:
+- Write ONE short paragraph (3-4 sentences) summarizing overall conditions in plain language \
+for a platform admin.
+- Never claim certainty about future price moves.
+- End with a brief reminder these are demo, rule-based signals, not financial advice."""
+
+
+def _template_market_summary(recs: list) -> str:
+    bullish = sum(1 for r in recs if r.action == "BUY")
+    bearish = sum(1 for r in recs if r.action == "SELL")
+    neutral = len(recs) - bullish - bearish
+    lean = "bullish" if bullish > bearish else "bearish" if bearish > bullish else "mixed"
+    return (
+        f"Across the {len(recs)} tracked symbols, the engine currently reads {bullish} bullish, "
+        f"{bearish} bearish, and {neutral} neutral signal(s) — overall conditions look {lean}. "
+        "This is a demo, rule-based signal summary, not financial advice — markets are uncertain."
+    )
+
+
+@router.get("/market-summary", response_model=MarketSummaryResponse)
+def get_market_summary(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    recs = [build_recommendation(symbol, db) for symbol in SYMBOLS]
+    per_symbol = {r.symbol: r.action for r in recs}
+
+    if not settings.anthropic_api_key:
+        return MarketSummaryResponse(
+            summary=_template_market_summary(recs), generated_by="template", per_symbol=per_symbol
+        )
+
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        lines = [
+            f"{r.symbol}: {r.action}, confidence {r.confidence:.0f}%, risk {r.risk_level}"
+            for r in recs
+        ]
+        response = client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=300,
+            system=MARKET_SUMMARY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": "\n".join(lines)}],
+        )
+        text_out = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
+        return MarketSummaryResponse(
+            summary=text_out.strip(), generated_by="claude", per_symbol=per_symbol
+        )
+    except Exception:
+        return MarketSummaryResponse(
+            summary=_template_market_summary(recs), generated_by="template", per_symbol=per_symbol
+        )
+
+
+AI_QUERY_SYSTEM_PROMPT = """You are an AI operations analyst embedded in a DEMO paper-trading \
+platform's admin dashboard (the "AI Command Center"). You'll be given a snapshot of current \
+platform stats, AI performance, and recent trade activity as context, followed by an admin's \
+question. Rules:
+- Answer using ONLY the provided data — if it doesn't answer the question, say so plainly \
+rather than guessing or inventing numbers.
+- Keep answers concise and analytical.
+- This is a demo platform; never present the figures as real financial/production data."""
+
+
+@router.post("/ai-query", response_model=AiQueryResponse)
+def ai_query(
+    payload: AiQueryRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if not settings.anthropic_api_key:
+        return AiQueryResponse(
+            answer=(
+                "The AI Command Center needs an ANTHROPIC_API_KEY configured on the server "
+                "to answer free-form questions."
+            ),
+            generated_by="unavailable",
+        )
+
+    stats = get_stats(db=db, current_admin=current_admin)
+    perf = get_ai_performance(db=db, current_admin=current_admin)
+    recent = get_activity(db=db, current_admin=current_admin, limit=30)
+
+    context = (
+        f"Platform stats: {stats.model_dump()}\n"
+        f"AI performance: {perf.model_dump()}\n"
+        f"Most recent trades (up to 30): {[t.model_dump() for t in recent]}\n"
+    )
+
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=500,
+            system=AI_QUERY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": f"{context}\nQuestion: {payload.question}"}],
+        )
+        text_out = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
+        return AiQueryResponse(answer=text_out.strip(), generated_by="claude")
+    except Exception:
+        return AiQueryResponse(
+            answer="Couldn't reach the AI model right now — please try again shortly.",
+            generated_by="unavailable",
+        )
 
 
 @router.get("/messages", response_model=list[ContactMessageResponse])

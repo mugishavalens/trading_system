@@ -8,7 +8,13 @@ from ..database import get_db
 from ..market_data import market_store
 from ..models import EquitySnapshot, Position, User
 from ..portfolio_service import compute_win_rate
-from ..schemas import EquitySnapshotResponse, PortfolioResponse, PositionResponse
+from ..schemas import (
+    EquitySnapshotResponse,
+    ExposureItem,
+    PortfolioResponse,
+    PortfolioRiskResponse,
+    PositionResponse,
+)
 from ..security import get_current_user
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -83,6 +89,55 @@ def get_portfolio(
         win_rate=round(win_rate, 1),
         risk_score=risk_score,
         positions=position_responses,
+    )
+
+
+CONCENTRATION_WARNING_PCT = 30.0
+CONCENTRATION_TARGET_PCT = 20.0
+
+
+@router.get("/risk", response_model=PortfolioRiskResponse)
+def get_portfolio_risk(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    positions = db.query(Position).filter(Position.user_id == current_user.id).all()
+
+    values = {pos.symbol: market_store.get_last_price(pos.symbol) * pos.quantity for pos in positions}
+    positions_value = sum(values.values())
+    equity = current_user.cash_balance + positions_value
+
+    exposures = [
+        ExposureItem(
+            symbol=symbol,
+            value=round(value, 2),
+            pct_of_equity=round((value / equity * 100) if equity else 0, 1),
+        )
+        for symbol, value in values.items()
+    ]
+    exposures.sort(key=lambda e: e.pct_of_equity, reverse=True)
+
+    largest = exposures[0].pct_of_equity if exposures else 0.0
+
+    recommendations: list[str] = []
+    for exposure in exposures:
+        if exposure.pct_of_equity > CONCENTRATION_WARNING_PCT:
+            reduce_by = round(exposure.pct_of_equity - CONCENTRATION_TARGET_PCT, 1)
+            recommendations.append(
+                f"Consider reducing {exposure.symbol} exposure by about {reduce_by}% of "
+                f"equity — it currently makes up {exposure.pct_of_equity:.1f}%, above the "
+                f"{CONCENTRATION_WARNING_PCT:.0f}% concentration guideline for a "
+                f"{current_user.risk_profile.value} profile."
+            )
+    if not recommendations:
+        recommendations.append(
+            "No single position dominates your portfolio right now — exposure looks reasonably diversified."
+        )
+
+    return PortfolioRiskResponse(
+        risk_profile=current_user.risk_profile,
+        exposures=exposures,
+        largest_concentration_pct=round(largest, 1),
+        recommendations=recommendations,
     )
 
 

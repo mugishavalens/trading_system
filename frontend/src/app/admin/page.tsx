@@ -1,15 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, AdminStats, AIPerformance } from "@/lib/api";
+import Link from "next/link";
+import { api, AdminStats, AdminTrade, AIPerformance } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import StatCard from "@/components/StatCard";
 import BreakdownBars from "@/components/BreakdownBars";
+import LiveTicker from "@/components/LiveTicker";
+
+const FEED_POLL_MS = 4000;
 
 export default function AdminOverviewPage() {
   const { token } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [aiPerf, setAiPerf] = useState<AIPerformance | null>(null);
+  const [feed, setFeed] = useState<AdminTrade[]>([]);
 
   useEffect(() => {
     if (!token) return;
@@ -27,6 +32,23 @@ export default function AdminOverviewPage() {
 
     load();
     const id = setInterval(load, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    async function loadFeed() {
+      const data = await api.adminActivity(token!, { limit: 12 });
+      if (!cancelled) setFeed(data);
+    }
+
+    loadFeed();
+    const id = setInterval(loadFeed, FEED_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -55,6 +77,46 @@ export default function AdminOverviewPage() {
           label="Avg AI Confidence"
           value={stats ? `${stats.average_ai_confidence.toFixed(1)}%` : "—"}
           tone="accent"
+        />
+      </div>
+
+      <div className="glass rounded-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <div>
+            <p className="text-sm font-medium">Live Trade Feed</p>
+            <p className="text-xs text-muted">Most recent trades across the platform.</p>
+          </div>
+          <Link href="/admin/activity" className="text-xs text-accent hover:underline">
+            View all + filters
+          </Link>
+        </div>
+        <LiveTicker
+          items={feed}
+          keyFn={(t) => t.id}
+          emptyText="No trades yet."
+          renderItem={(t) => (
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <p>
+                  <span className="font-medium">{t.user_email}</span>{" "}
+                  <span className={t.side === "BUY" ? "text-success" : "text-danger"}>
+                    {t.side}
+                  </span>{" "}
+                  {t.symbol}
+                </p>
+                <p className="text-xs text-muted">
+                  {new Date(t.executed_at).toLocaleTimeString()} ·{" "}
+                  {t.source === "ai_auto" ? "AI (auto)" : t.source === "assisted" ? "AI (assisted)" : "Manual"}
+                  {t.confidence != null ? ` · ${t.confidence.toFixed(0)}% confidence` : ""}
+                </p>
+              </div>
+              {t.realized_pnl != null && (
+                <span className={t.realized_pnl >= 0 ? "text-success" : "text-danger"}>
+                  {t.realized_pnl >= 0 ? "+" : ""}${t.realized_pnl.toFixed(2)}
+                </span>
+              )}
+            </div>
+          )}
         />
       </div>
 

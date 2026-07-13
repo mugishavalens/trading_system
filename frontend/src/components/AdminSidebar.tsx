@@ -10,12 +10,18 @@ import {
   SlidersHorizontal,
   Activity,
   Mail,
+  Globe2,
+  BarChart3,
+  Terminal,
 } from "lucide-react";
 
 const NAV = [
   { icon: LayoutDashboard, label: "Overview", href: "/admin" },
   { icon: Users, label: "Users", href: "/admin/users" },
-  { icon: SlidersHorizontal, label: "AI Settings", href: "/admin/ai-settings" },
+  { icon: SlidersHorizontal, label: "AI Control Center", href: "/admin/ai-control" },
+  { icon: Globe2, label: "Market Intelligence", href: "/admin/market-intelligence" },
+  { icon: BarChart3, label: "User Analytics", href: "/admin/analytics" },
+  { icon: Terminal, label: "AI Command Center", href: "/admin/command-center" },
   { icon: Activity, label: "Activity Log", href: "/admin/activity" },
   { icon: Mail, label: "Messages", href: "/admin/messages" },
 ];

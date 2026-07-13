@@ -29,6 +29,19 @@ class UserRole(str, enum.Enum):
     admin = "admin"
 
 
+class TradingMode(str, enum.Enum):
+    manual = "manual"  # AI only ever suggests; user places every trade themselves
+    assisted = "assisted"  # autopilot proposes trades that the user approves/rejects
+    autonomous = "autonomous"  # autopilot executes directly, today's original behavior
+
+
+class PendingTradeStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    expired = "expired"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -46,6 +59,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     cash_balance: Mapped[float] = mapped_column(Float, default=100_000.0)
     auto_trade_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    trading_mode: Mapped[TradingMode] = mapped_column(
+        Enum(TradingMode), default=TradingMode.manual
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
@@ -57,6 +73,9 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     equity_snapshots: Mapped[list["EquitySnapshot"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    pending_trades: Mapped[list["PendingTrade"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -128,9 +147,36 @@ class AIEngineConfig(Base):
     buy_threshold: Mapped[float] = mapped_column(Float, default=0.15)
     sell_threshold: Mapped[float] = mapped_column(Float, default=-0.15)
     autopilot_confidence_floor: Mapped[float] = mapped_column(Float, default=65.0)
+    autopilot_paused: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+
+class PendingTrade(Base):
+    """A trade the autopilot loop proposed for a user in `assisted` mode but
+    hasn't executed yet — the user must approve or reject it (see
+    trade_engine.place_trade for the actual execution path, reused on approve)."""
+
+    __tablename__ = "pending_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    side: Mapped[TradeSide] = mapped_column(Enum(TradeSide))
+    quantity: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    risk_level: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[PendingTradeStatus] = mapped_column(
+        Enum(PendingTradeStatus), default=PendingTradeStatus.pending
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, index=True
+    )
+    decided_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="pending_trades")
 
 
 class ContactMessage(Base):

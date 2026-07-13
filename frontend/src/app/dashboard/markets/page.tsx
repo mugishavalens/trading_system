@@ -2,13 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, Candle, SymbolInfo } from "@/lib/api";
+import clsx from "clsx";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { api, AIRecommendation, Candle, SymbolInfo } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import Sparkline from "@/components/Sparkline";
+
+const SENTIMENT_META: Record<string, { label: string; icon: typeof TrendingUp; className: string }> = {
+  BUY: { label: "Bullish", icon: TrendingUp, className: "text-success bg-success/15" },
+  SELL: { label: "Bearish", icon: TrendingDown, className: "text-danger bg-danger/15" },
+  HOLD: { label: "Neutral", icon: Minus, className: "text-muted bg-surface-2" },
+};
 
 export default function MarketsPage() {
   const router = useRouter();
+  const { token } = useAuth();
   const [symbols, setSymbols] = useState<SymbolInfo[]>([]);
   const [candlesBySymbol, setCandlesBySymbol] = useState<Record<string, Candle[]>>({});
+  const [recsBySymbol, setRecsBySymbol] = useState<Record<string, AIRecommendation>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +44,24 @@ export default function MarketsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    async function loadRecs() {
+      const recs = await api.recommendations(token!);
+      if (cancelled) return;
+      setRecsBySymbol(Object.fromEntries(recs.map((r) => [r.symbol, r])));
+    }
+
+    loadRecs();
+    const id = setInterval(loadRecs, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token]);
+
   return (
     <div>
       <h1 className="text-xl font-semibold">Markets</h1>
@@ -44,6 +73,9 @@ export default function MarketsPage() {
         {symbols.map((s) => {
           const candles = candlesBySymbol[s.symbol] ?? [];
           const positive = s.change_pct_24h >= 0;
+          const rec = recsBySymbol[s.symbol];
+          const meta = rec ? SENTIMENT_META[rec.action] : null;
+          const Icon = meta?.icon;
           return (
             <button
               key={s.symbol}
@@ -68,6 +100,11 @@ export default function MarketsPage() {
                   </p>
                 </div>
               </div>
+              {meta && Icon && (
+                <span className={clsx("mt-3 flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium", meta.className)}>
+                  <Icon size={12} /> {meta.label} · {rec.confidence.toFixed(0)}%
+                </span>
+              )}
               <div className="mt-3">
                 <Sparkline
                   values={candles.map((c) => c.close)}

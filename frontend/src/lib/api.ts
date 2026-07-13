@@ -8,6 +8,15 @@ export class ApiError extends Error {
   }
 }
 
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { token?: string | null } = {}
@@ -64,6 +73,7 @@ export const api = {
       experience_level: string;
       risk_profile: string;
       auto_trade_enabled: boolean;
+      trading_mode: TradingMode;
     }>
   ) =>
     request<UserResponse>("/api/auth/profile", {
@@ -120,11 +130,33 @@ export const api = {
       token,
     }),
 
-  tradeHistory: (token: string) =>
-    request<Trade[]>("/api/trading/history", { token }),
+  tradeHistory: (
+    token: string,
+    filters: {
+      symbol?: string;
+      side?: string;
+      date_from?: string;
+      date_to?: string;
+      offset?: number;
+      limit?: number;
+    } = {}
+  ) =>
+    request<Trade[]>(`/api/trading/history${buildQuery(filters)}`, { token }),
+
+  pendingTrades: (token: string) =>
+    request<PendingTrade[]>("/api/trading/pending", { token }),
+
+  approvePendingTrade: (token: string, id: number) =>
+    request<Trade>(`/api/trading/pending/${id}/approve`, { method: "POST", token }),
+
+  rejectPendingTrade: (token: string, id: number) =>
+    request<PendingTrade>(`/api/trading/pending/${id}/reject`, { method: "POST", token }),
 
   portfolio: (token: string) =>
     request<Portfolio>("/api/portfolio", { token }),
+
+  portfolioRisk: (token: string) =>
+    request<PortfolioRisk>("/api/portfolio/risk", { token }),
 
   portfolioHistory: (token: string) =>
     request<EquitySnapshot[]>("/api/portfolio/history", { token }),
@@ -136,8 +168,10 @@ export const api = {
       body: JSON.stringify({ message, history }),
     }),
 
-  adminUsers: (token: string) =>
-    request<AdminUser[]>("/api/admin/users", { token }),
+  adminUsers: (
+    token: string,
+    filters: { search?: string; role?: string; status?: string; offset?: number; limit?: number } = {}
+  ) => request<AdminUser[]>(`/api/admin/users${buildQuery(filters)}`, { token }),
 
   adminSuspendUser: (token: string, userId: number) =>
     request<AdminUser>(`/api/admin/users/${userId}/suspend`, {
@@ -163,8 +197,19 @@ export const api = {
   adminAiPerformance: (token: string) =>
     request<AIPerformance>("/api/admin/ai-performance", { token }),
 
-  adminActivity: (token: string, limit = 100) =>
-    request<AdminTrade[]>(`/api/admin/activity?limit=${limit}`, { token }),
+  adminActivity: (
+    token: string,
+    filters: {
+      symbol?: string;
+      side?: string;
+      source?: string;
+      user?: string;
+      date_from?: string;
+      date_to?: string;
+      offset?: number;
+      limit?: number;
+    } = {}
+  ) => request<AdminTrade[]>(`/api/admin/activity${buildQuery(filters)}`, { token }),
 
   adminGetAiConfig: (token: string) =>
     request<AIEngineConfig>("/api/admin/ai-config", { token }),
@@ -180,6 +225,28 @@ export const api = {
     request<AIEngineConfig>("/api/admin/ai-config/reset", {
       method: "POST",
       token,
+    }),
+
+  adminPauseAutopilot: (token: string) =>
+    request<AIEngineConfig>("/api/admin/ai-config/pause", { method: "POST", token }),
+
+  adminResumeAutopilot: (token: string) =>
+    request<AIEngineConfig>("/api/admin/ai-config/resume", { method: "POST", token }),
+
+  adminHealth: (token: string) =>
+    request<AdminHealth>("/api/admin/health", { token }),
+
+  adminAnalytics: (token: string, filters: { date_from?: string; date_to?: string } = {}) =>
+    request<AdminAnalytics>(`/api/admin/analytics${buildQuery(filters)}`, { token }),
+
+  adminMarketSummary: (token: string) =>
+    request<MarketSummary>("/api/admin/market-summary", { token }),
+
+  adminAiQuery: (token: string, question: string) =>
+    request<AiQueryResult>("/api/admin/ai-query", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ question }),
     }),
 
   adminMessages: (token: string) =>
@@ -209,6 +276,8 @@ export const api = {
 
 // ---- Types ----
 
+export type TradingMode = "manual" | "assisted" | "autonomous";
+
 export interface UserResponse {
   id: number;
   full_name: string;
@@ -219,6 +288,7 @@ export interface UserResponse {
   is_active: boolean;
   cash_balance: number;
   auto_trade_enabled: boolean;
+  trading_mode: TradingMode;
 }
 
 export interface SymbolInfo {
@@ -301,6 +371,32 @@ export interface EquitySnapshot {
   recorded_at: string;
 }
 
+export interface PendingTrade {
+  id: number;
+  symbol: string;
+  side: "BUY" | "SELL";
+  quantity: number;
+  confidence: number;
+  risk_level: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "expired";
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface ExposureItem {
+  symbol: string;
+  value: number;
+  pct_of_equity: number;
+}
+
+export interface PortfolioRisk {
+  risk_profile: "conservative" | "moderate" | "aggressive";
+  exposures: ExposureItem[];
+  largest_concentration_pct: number;
+  recommendations: string[];
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -376,14 +472,57 @@ export interface AIEngineConfig {
   buy_threshold: number;
   sell_threshold: number;
   autopilot_confidence_floor: number;
+  autopilot_paused: boolean;
   updated_at: string;
 }
 
-export type AIEngineConfigInput = Omit<AIEngineConfig, "updated_at">;
+export type AIEngineConfigInput = Omit<AIEngineConfig, "updated_at" | "autopilot_paused">;
+
+export interface AutopilotStatus {
+  paused: boolean;
+  last_run_at: string | null;
+  last_trades_placed: number;
+  last_trades_proposed: number;
+  last_error: string | null;
+  run_interval_seconds: number;
+}
+
+export interface AdminHealth {
+  status: "ok" | "degraded";
+  database_ok: boolean;
+  autopilot: AutopilotStatus;
+}
+
+export interface DateCount {
+  date: string;
+  count: number;
+}
+
+export interface SymbolVolume {
+  symbol: string;
+  trade_count: number;
+}
+
+export interface AdminAnalytics {
+  signups_by_day: DateCount[];
+  top_symbols: SymbolVolume[];
+}
+
+export interface MarketSummary {
+  summary: string;
+  generated_by: "claude" | "template";
+  per_symbol: Record<string, string>;
+}
+
+export interface AiQueryResult {
+  answer: string;
+  generated_by: "claude" | "unavailable";
+}
 
 export interface NewsItem {
   id: string;
   symbol: string;
+  asset_name: string;
   headline: string;
   summary: string;
   sentiment: "positive" | "negative" | "neutral";

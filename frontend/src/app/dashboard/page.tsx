@@ -3,12 +3,14 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Bot } from "lucide-react";
+import { Bot, Check, Sparkles, X } from "lucide-react";
 import {
   api,
   AIRecommendation,
   ApiError,
   Candle,
+  NewsItem,
+  PendingTrade,
   Portfolio,
   SymbolInfo,
   Trade,
@@ -22,6 +24,12 @@ import PositionsTable from "@/components/PositionsTable";
 import TradeHistoryTable from "@/components/TradeHistoryTable";
 
 const POLL_MS = 6000;
+
+const MODE_LABEL: Record<string, string> = {
+  manual: "Manual — you place every trade",
+  assisted: "Assisted — approve or reject AI proposals",
+  autonomous: "Autonomous — trading on your behalf",
+};
 
 export default function DashboardPage() {
   return (
@@ -52,6 +60,11 @@ function DashboardContent() {
   const [executing, setExecuting] = useState(false);
   const [tradeError, setTradeError] = useState<string | null>(null);
 
+  const [pending, setPending] = useState<PendingTrade[]>([]);
+  const [pendingBusyId, setPendingBusyId] = useState<number | null>(null);
+
+  const [news, setNews] = useState<NewsItem[]>([]);
+
   const refreshMarket = useCallback(async () => {
     const list = await api.symbols();
     setSymbols(list);
@@ -77,6 +90,11 @@ function DashboardContent() {
     setTrades(h);
   }, [token]);
 
+  const refreshPending = useCallback(async () => {
+    if (!token) return;
+    setPending(await api.pendingTrades(token));
+  }, [token]);
+
   useEffect(() => {
     refreshMarket();
     const id = setInterval(refreshMarket, POLL_MS);
@@ -92,8 +110,52 @@ function DashboardContent() {
   }, [refreshSymbolData]);
 
   useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    async function loadNews() {
+      const items = await api.news(token!, 50);
+      if (!cancelled) setNews(items);
+    }
+    loadNews();
+    const id = setInterval(loadNews, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token]);
+
+  useEffect(() => {
     refreshAccount();
   }, [refreshAccount]);
+
+  useEffect(() => {
+    if (user?.trading_mode !== "assisted") return;
+    refreshPending();
+    const id = setInterval(refreshPending, POLL_MS);
+    return () => clearInterval(id);
+  }, [refreshPending, user?.trading_mode]);
+
+  async function handleApprovePending(id: number) {
+    if (!token) return;
+    setPendingBusyId(id);
+    try {
+      await api.approvePendingTrade(token, id);
+      await Promise.all([refreshPending(), refreshAccount(), refreshUser()]);
+    } finally {
+      setPendingBusyId(null);
+    }
+  }
+
+  async function handleRejectPending(id: number) {
+    if (!token) return;
+    setPendingBusyId(id);
+    try {
+      await api.rejectPendingTrade(token, id);
+      await refreshPending();
+    } finally {
+      setPendingBusyId(null);
+    }
+  }
 
   async function handleExplain() {
     if (!token) return;
@@ -146,19 +208,63 @@ function DashboardContent() {
         <Link
           href="/dashboard/settings"
           className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors ${
-            user.auto_trade_enabled
+            user.trading_mode !== "manual"
               ? "border-accent/30 bg-accent/10 hover:bg-accent/15"
               : "border-border bg-surface hover:bg-surface-2"
           }`}
         >
           <span className="flex items-center gap-2">
-            <Bot size={16} className={user.auto_trade_enabled ? "text-accent" : "text-muted"} />
-            <span className={user.auto_trade_enabled ? "text-accent font-medium" : "text-muted"}>
-              AI Autopilot: {user.auto_trade_enabled ? "ON — trading on your behalf" : "OFF"}
+            <Bot size={16} className={user.trading_mode !== "manual" ? "text-accent" : "text-muted"} />
+            <span className={user.trading_mode !== "manual" ? "text-accent font-medium" : "text-muted"}>
+              Trading Mode: {MODE_LABEL[user.trading_mode]}
             </span>
           </span>
           <span className="text-xs text-muted underline">Manage in Settings</span>
         </Link>
+      )}
+
+      {user?.trading_mode === "assisted" && pending.length > 0 && (
+        <div className="glass rounded-2xl border-2 border-accent/30 p-5">
+          <p className="flex items-center gap-2 font-semibold">
+            <Sparkles size={16} className="text-accent" /> Awaiting your approval
+          </p>
+          <div className="mt-3 space-y-3">
+            {pending.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background/60 p-3"
+              >
+                <div>
+                  <p className="text-sm">
+                    <span className={p.side === "BUY" ? "text-success" : "text-danger"}>
+                      {p.side}
+                    </span>{" "}
+                    <span className="font-medium">{p.symbol}</span> · qty{" "}
+                    {p.quantity.toFixed(4)} · {p.confidence.toFixed(0)}% confidence ·{" "}
+                    {p.risk_level} risk
+                  </p>
+                  <p className="mt-1 text-xs text-muted">{p.reason}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApprovePending(p.id)}
+                    disabled={pendingBusyId === p.id}
+                    className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-black hover:bg-accent-2 disabled:opacity-50 transition-colors"
+                  >
+                    <Check size={14} /> Approve
+                  </button>
+                  <button
+                    onClick={() => handleRejectPending(p.id)}
+                    disabled={pendingBusyId === p.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50 transition-colors"
+                  >
+                    <X size={14} /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
@@ -217,6 +323,9 @@ function DashboardContent() {
         </div>
 
         <div>
+          <p className="mb-3 flex items-center gap-2 text-sm font-medium text-muted">
+            <Sparkles size={14} className="text-accent" /> Your AI Trading Partner
+          </p>
           {recommendation ? (
             <RecommendationCard
               rec={recommendation}
@@ -235,6 +344,38 @@ function DashboardContent() {
           ) : (
             <div className="glass flex h-64 items-center justify-center rounded-2xl text-muted">
               Analyzing market...
+            </div>
+          )}
+
+          {news.filter((n) => n.symbol === selected).length > 0 && (
+            <div className="glass mt-4 rounded-2xl">
+              <div className="border-b border-border px-4 py-3 text-sm font-medium">
+                Related News — {selected}
+              </div>
+              <div className="divide-y divide-border">
+                {news
+                  .filter((n) => n.symbol === selected)
+                  .slice(0, 3)
+                  .map((n) => (
+                    <div key={n.id} className="px-4 py-3">
+                      <p className="text-sm">{n.headline}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {new Date(n.published_at).toLocaleTimeString()} ·{" "}
+                        <span
+                          className={
+                            n.sentiment === "positive"
+                              ? "text-success"
+                              : n.sentiment === "negative"
+                              ? "text-danger"
+                              : "text-muted"
+                          }
+                        >
+                          {n.sentiment}
+                        </span>
+                      </p>
+                    </div>
+                  ))}
+              </div>
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@ import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .models import ExperienceLevel, RiskProfile, TradeSide, UserRole
+from .models import ExperienceLevel, RiskProfile, TradeSide, TradingMode, UserRole
 
 
 # ---- Auth ----
@@ -35,6 +35,7 @@ class UserResponse(BaseModel):
     is_active: bool
     cash_balance: float
     auto_trade_enabled: bool
+    trading_mode: TradingMode
 
     class Config:
         from_attributes = True
@@ -44,6 +45,7 @@ class ProfileUpdateRequest(BaseModel):
     experience_level: ExperienceLevel | None = None
     risk_profile: RiskProfile | None = None
     auto_trade_enabled: bool | None = None
+    trading_mode: TradingMode | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -164,6 +166,35 @@ class EquitySnapshotResponse(BaseModel):
         from_attributes = True
 
 
+class PendingTradeResponse(BaseModel):
+    id: int
+    symbol: str
+    side: TradeSide
+    quantity: float
+    confidence: float
+    risk_level: str
+    reason: str
+    status: str
+    created_at: datetime.datetime
+    decided_at: datetime.datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class ExposureItem(BaseModel):
+    symbol: str
+    value: float
+    pct_of_equity: float
+
+
+class PortfolioRiskResponse(BaseModel):
+    risk_profile: RiskProfile
+    exposures: list[ExposureItem]
+    largest_concentration_pct: float
+    recommendations: list[str]
+
+
 # ---- AI Assistant ----
 
 class ChatMessage(BaseModel):
@@ -251,10 +282,56 @@ class AIEngineConfigResponse(BaseModel):
     buy_threshold: float
     sell_threshold: float
     autopilot_confidence_floor: float
+    autopilot_paused: bool
     updated_at: datetime.datetime
 
     class Config:
         from_attributes = True
+
+
+class AutopilotStatusResponse(BaseModel):
+    paused: bool
+    last_run_at: datetime.datetime | None
+    last_trades_placed: int
+    last_trades_proposed: int
+    last_error: str | None
+    run_interval_seconds: int
+
+
+class AdminHealthResponse(BaseModel):
+    status: str  # "ok" | "degraded"
+    database_ok: bool
+    autopilot: AutopilotStatusResponse
+
+
+class DateCount(BaseModel):
+    date: str
+    count: int
+
+
+class SymbolVolume(BaseModel):
+    symbol: str
+    trade_count: int
+
+
+class AdminAnalyticsResponse(BaseModel):
+    signups_by_day: list[DateCount]
+    top_symbols: list[SymbolVolume]
+
+
+class MarketSummaryResponse(BaseModel):
+    summary: str
+    generated_by: str  # "claude" | "template"
+    per_symbol: dict[str, str]  # symbol -> BUY/SELL/HOLD
+
+
+class AiQueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class AiQueryResponse(BaseModel):
+    answer: str
+    generated_by: str  # "claude" | "unavailable"
 
 
 class AIEngineConfigUpdateRequest(BaseModel):
@@ -273,6 +350,7 @@ class AIEngineConfigUpdateRequest(BaseModel):
 class NewsItemResponse(BaseModel):
     id: str
     symbol: str
+    asset_name: str
     headline: str
     summary: str
     sentiment: str  # "positive" | "negative" | "neutral"

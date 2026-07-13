@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, UserRole
+from ..models import TradingMode, User, UserRole
 from ..schemas import (
     ChangePasswordRequest,
     LoginRequest,
@@ -63,7 +63,10 @@ def update_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if payload.auto_trade_enabled and current_user.role == UserRole.admin:
+    wants_autopilot = payload.auto_trade_enabled or (
+        payload.trading_mode is not None and payload.trading_mode != TradingMode.manual
+    )
+    if wants_autopilot and current_user.role == UserRole.admin:
         raise HTTPException(
             status_code=400, detail="Admin accounts don't trade, so autopilot isn't available"
         )
@@ -74,6 +77,11 @@ def update_profile(
         current_user.risk_profile = payload.risk_profile
     if payload.auto_trade_enabled is not None:
         current_user.auto_trade_enabled = payload.auto_trade_enabled
+    if payload.trading_mode is not None:
+        current_user.trading_mode = payload.trading_mode
+        # trading_mode is the source of truth for whether autopilot scans this
+        # user at all; manual means "AI only suggests, never acts on its own."
+        current_user.auto_trade_enabled = payload.trading_mode != TradingMode.manual
 
     db.commit()
     db.refresh(current_user)

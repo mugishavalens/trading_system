@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, EquitySnapshot, Portfolio, Trade } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { api, EquitySnapshot, Portfolio, SymbolInfo, Trade } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import StatCard from "@/components/StatCard";
 import AllocationPie from "@/components/AllocationPie";
 import EquityChart from "@/components/EquityChart";
 import PositionsTable from "@/components/PositionsTable";
 import TradeHistoryTable from "@/components/TradeHistoryTable";
+import FilterBar from "@/components/FilterBar";
 
 const POLL_MS = 8000;
 
@@ -16,24 +17,39 @@ export default function PortfolioPage() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [history, setHistory] = useState<EquitySnapshot[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    const [p, h, t] = await Promise.all([
-      api.portfolio(token),
-      api.portfolioHistory(token),
-      api.tradeHistory(token),
-    ]);
-    setPortfolio(p);
-    setHistory(h);
-    setTrades(t);
-  }, [token]);
+  const [symbols, setSymbols] = useState<SymbolInfo[]>([]);
+  const [symbol, setSymbol] = useState("");
+  const [side, setSide] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
+    api.symbols().then(setSymbols);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    async function refresh() {
+      const [p, h, t] = await Promise.all([
+        api.portfolio(token!),
+        api.portfolioHistory(token!),
+        api.tradeHistory(token!, { symbol, side, date_from: dateFrom, date_to: dateTo }),
+      ]);
+      if (cancelled) return;
+      setPortfolio(p);
+      setHistory(h);
+      setTrades(t);
+    }
+
     refresh();
     const id = setInterval(refresh, POLL_MS);
-    return () => clearInterval(id);
-  }, [refresh]);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token, symbol, side, dateFrom, dateTo]);
 
   const slices = [
     ...(portfolio?.positions.map((p) => ({
@@ -97,8 +113,16 @@ export default function PortfolioPage() {
       </div>
 
       <div className="glass rounded-2xl">
-        <div className="border-b border-border px-5 py-3 text-sm font-medium">
-          Trade History
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <p className="text-sm font-medium">Trade History</p>
+          <FilterBar
+            selects={[
+              { key: "symbol", label: "Symbol", value: symbol, onChange: setSymbol, options: symbols.map((s) => ({ value: s.symbol, label: s.symbol })) },
+              { key: "side", label: "Side", value: side, onChange: setSide, options: [{ value: "BUY", label: "Buy" }, { value: "SELL", label: "Sell" }] },
+            ]}
+            dateRange={{ from: dateFrom, to: dateTo, onFromChange: setDateFrom, onToChange: setDateTo }}
+            onClear={() => { setSymbol(""); setSide(""); setDateFrom(""); setDateTo(""); }}
+          />
         </div>
         <TradeHistoryTable trades={trades} />
       </div>

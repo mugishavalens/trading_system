@@ -74,6 +74,7 @@ class NewsStore:
         return {
             "id": str(next(self._counter)),
             "symbol": symbol,
+            "asset_name": name,
             "headline": headline,
             "summary": summary,
             "sentiment": sentiment,

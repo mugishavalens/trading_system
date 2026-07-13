@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, CheckCircle2, Loader2 } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
+import clsx from "clsx";
+import { Bot, CheckCircle2, Loader2, Sparkles, UserCheck, Zap } from "lucide-react";
+import { api, ApiError, TradingMode } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const EXPERIENCE_OPTIONS = [
@@ -17,6 +18,27 @@ const RISK_OPTIONS = [
   { value: "aggressive", label: "Aggressive" },
 ];
 
+const TRADING_MODES: { value: TradingMode; label: string; icon: typeof Bot; description: string }[] = [
+  {
+    value: "manual",
+    label: "Manual",
+    icon: UserCheck,
+    description: "The AI only ever suggests — you place every trade yourself.",
+  },
+  {
+    value: "assisted",
+    label: "Assisted",
+    icon: Sparkles,
+    description: "The AI prepares trades for high-confidence signals — you approve or reject each one.",
+  },
+  {
+    value: "autonomous",
+    label: "Autonomous",
+    icon: Zap,
+    description: "The AI executes trades on your behalf automatically, sized to your risk profile.",
+  },
+];
+
 export default function SettingsPage() {
   const { user, token, refreshUser } = useAuth();
 
@@ -26,8 +48,8 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const [autopilotBusy, setAutopilotBusy] = useState(false);
-  const [autopilotError, setAutopilotError] = useState<string | null>(null);
+  const [modeBusy, setModeBusy] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -56,16 +78,16 @@ export default function SettingsPage() {
     }
   }
 
-  async function toggleAutopilot() {
-    setAutopilotError(null);
-    setAutopilotBusy(true);
+  async function setTradingMode(mode: TradingMode) {
+    setModeError(null);
+    setModeBusy(true);
     try {
-      await api.updateProfile(token!, { auto_trade_enabled: !user!.auto_trade_enabled });
+      await api.updateProfile(token!, { trading_mode: mode });
       await refreshUser();
     } catch (err) {
-      setAutopilotError(err instanceof ApiError ? err.message : "Could not update autopilot");
+      setModeError(err instanceof ApiError ? err.message : "Could not update trading mode");
     } finally {
-      setAutopilotBusy(false);
+      setModeBusy(false);
     }
   }
 
@@ -99,56 +121,56 @@ export default function SettingsPage() {
       </div>
 
       <div className="glass rounded-2xl border-2 border-accent/30 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
-              <Bot size={20} />
-            </div>
-            <div>
-              <p className="font-semibold">AI Autopilot</p>
-              <p className="text-sm text-muted">Let the AI trade for you automatically</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <Bot size={20} />
           </div>
-          <button
-            onClick={toggleAutopilot}
-            disabled={autopilotBusy}
-            role="switch"
-            aria-checked={user.auto_trade_enabled}
-            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-              user.auto_trade_enabled ? "bg-accent" : "bg-surface-2"
-            }`}
-          >
-            <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                user.auto_trade_enabled ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
+          <div>
+            <p className="font-semibold">Trading Mode</p>
+            <p className="text-sm text-muted">How involved the AI is in placing your trades</p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {TRADING_MODES.map((m) => {
+            const Icon = m.icon;
+            const active = user.trading_mode === m.value;
+            return (
+              <button
+                key={m.value}
+                onClick={() => setTradingMode(m.value)}
+                disabled={modeBusy}
+                className={clsx(
+                  "rounded-xl border p-4 text-left transition-colors disabled:opacity-50",
+                  active
+                    ? "border-accent bg-accent/10"
+                    : "border-border bg-surface hover:bg-surface-2"
+                )}
+              >
+                <Icon size={18} className={active ? "text-accent" : "text-muted"} />
+                <p className={clsx("mt-2 font-medium", active && "text-accent")}>{m.label}</p>
+                <p className="mt-1 text-xs text-muted">{m.description}</p>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-background/60 p-4 text-sm text-muted">
           <p>
-            <strong className="text-foreground">Exactly what this does:</strong> every ~90
-            seconds, the AI checks all 5 symbols. If a BUY or SELL signal reaches at least{" "}
-            <strong className="text-foreground">65% confidence</strong>, it automatically places
-            a trade sized to your <strong className="text-foreground capitalize">{riskProfile}</strong>{" "}
-            risk profile — the same sizing as clicking &quot;Let AI Execute&quot; yourself. Each
-            symbol has a 10-minute cooldown so it won&apos;t re-trade the same signal repeatedly.
+            Every ~90 seconds, the AI checks all 5 symbols. In <strong className="text-foreground">Assisted</strong>{" "}
+            or <strong className="text-foreground">Autonomous</strong> mode, if a BUY or SELL signal
+            reaches at least <strong className="text-foreground">65% confidence</strong>, it&apos;s sized
+            to your <strong className="text-foreground capitalize">{riskProfile}</strong> risk profile
+            — the same sizing as clicking &quot;Let AI Execute&quot; yourself. Each symbol has a
+            10-minute cooldown so it won&apos;t re-signal repeatedly.
           </p>
           <p className="mt-2">
             This is still a demo signal, not financial advice — markets are uncertain, and
-            automated trades can lose virtual money just like manual ones. Turn it off any time.
+            automated trades can lose virtual money just like manual ones. Switch modes any time.
           </p>
         </div>
 
-        {autopilotError && <p className="mt-3 text-sm text-danger">{autopilotError}</p>}
-
-        <p className="mt-3 text-xs text-muted">
-          Currently:{" "}
-          <span className={user.auto_trade_enabled ? "text-success" : "text-muted"}>
-            {user.auto_trade_enabled ? "ON — the AI is trading for you" : "OFF"}
-          </span>
-        </p>
+        {modeError && <p className="mt-3 text-sm text-danger">{modeError}</p>}
       </div>
 
       <form onSubmit={saveProfile} className="glass rounded-2xl p-6">
