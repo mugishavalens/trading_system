@@ -2,8 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User
-from ..schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from ..models import User, UserRole
+from ..schemas import (
+    ChangePasswordRequest,
+    LoginRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -48,3 +55,39 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.auto_trade_enabled and current_user.role == UserRole.admin:
+        raise HTTPException(
+            status_code=400, detail="Admin accounts don't trade, so autopilot isn't available"
+        )
+
+    if payload.experience_level is not None:
+        current_user.experience_level = payload.experience_level
+    if payload.risk_profile is not None:
+        current_user.risk_profile = payload.risk_profile
+    if payload.auto_trade_enabled is not None:
+        current_user.auto_trade_enabled = payload.auto_trade_enabled
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "updated"}

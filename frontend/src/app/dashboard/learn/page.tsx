@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { CheckCircle2, ChevronDown } from "lucide-react";
-import { LESSONS } from "@/lib/lessons";
+import { CATEGORIES, LESSONS, LessonCategory } from "@/lib/lessons";
 
 const STORAGE_KEY = "ai_trading_demo_learn_progress";
 
@@ -15,8 +15,11 @@ const LEVEL_STYLES: Record<string, string> = {
 
 export default function LearnPage() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [category, setCategory] = useState<LessonCategory>("Fundamentals");
   const [openId, setOpenId] = useState<string | null>(LESSONS[0].id);
   const [selectedOption, setSelectedOption] = useState<Record<string, number>>({});
+
+  const visibleLessons = LESSONS.filter((l) => l.category === category);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -57,7 +60,7 @@ export default function LearnPage() {
 
       <div className="glass mt-4 rounded-2xl p-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">Progress</span>
+          <span className="text-muted">Overall progress</span>
           <span className="font-medium">
             {completed.size}/{LESSONS.length} lessons
           </span>
@@ -70,8 +73,34 @@ export default function LearnPage() {
         </div>
       </div>
 
+      <div className="mt-4 flex gap-2">
+        {CATEGORIES.map((c) => {
+          const total = LESSONS.filter((l) => l.category === c).length;
+          const done = LESSONS.filter(
+            (l) => l.category === c && completed.has(l.id)
+          ).length;
+          return (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              className={clsx(
+                "rounded-lg border px-4 py-2 text-sm font-medium transition-colors",
+                category === c
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-muted hover:text-foreground"
+              )}
+            >
+              {c}
+              <span className="ml-1.5 text-xs opacity-70">
+                {done}/{total}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-4 space-y-3">
-        {LESSONS.map((lesson) => {
+        {visibleLessons.map((lesson) => {
           const isOpen = openId === lesson.id;
           const isDone = completed.has(lesson.id);
           const chosen = selectedOption[lesson.id];

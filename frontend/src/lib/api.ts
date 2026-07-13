@@ -58,6 +58,30 @@ export const api = {
 
   me: (token: string) => request<UserResponse>("/api/auth/me", { token }),
 
+  updateProfile: (
+    token: string,
+    payload: Partial<{
+      experience_level: string;
+      risk_profile: string;
+      auto_trade_enabled: boolean;
+    }>
+  ) =>
+    request<UserResponse>("/api/auth/profile", {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(payload),
+    }),
+
+  changePassword: (
+    token: string,
+    payload: { current_password: string; new_password: string }
+  ) =>
+    request<{ status: string }>("/api/auth/change-password", {
+      method: "POST",
+      token,
+      body: JSON.stringify(payload),
+    }),
+
   symbols: () => request<SymbolInfo[]>("/api/market/symbols"),
 
   candles: (symbol: string, limit = 120) =>
@@ -138,6 +162,49 @@ export const api = {
 
   adminAiPerformance: (token: string) =>
     request<AIPerformance>("/api/admin/ai-performance", { token }),
+
+  adminActivity: (token: string, limit = 100) =>
+    request<AdminTrade[]>(`/api/admin/activity?limit=${limit}`, { token }),
+
+  adminGetAiConfig: (token: string) =>
+    request<AIEngineConfig>("/api/admin/ai-config", { token }),
+
+  adminUpdateAiConfig: (token: string, payload: AIEngineConfigInput) =>
+    request<AIEngineConfig>("/api/admin/ai-config", {
+      method: "PUT",
+      token,
+      body: JSON.stringify(payload),
+    }),
+
+  adminResetAiConfig: (token: string) =>
+    request<AIEngineConfig>("/api/admin/ai-config/reset", {
+      method: "POST",
+      token,
+    }),
+
+  adminMessages: (token: string) =>
+    request<ContactMessage[]>("/api/admin/messages", { token }),
+
+  adminMarkMessageRead: (token: string, id: number) =>
+    request<ContactMessage>(`/api/admin/messages/${id}/read`, {
+      method: "POST",
+      token,
+    }),
+
+  adminDeleteMessage: (token: string, id: number) =>
+    request<{ status: string }>(`/api/admin/messages/${id}`, {
+      method: "DELETE",
+      token,
+    }),
+
+  news: (token: string, limit = 50) =>
+    request<NewsItem[]>(`/api/news?limit=${limit}`, { token }),
+
+  submitContact: (payload: { name: string; email: string; message: string }) =>
+    request<{ status: string }>("/api/contact", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 // ---- Types ----
@@ -151,6 +218,7 @@ export interface UserResponse {
   role: "user" | "admin";
   is_active: boolean;
   cash_balance: number;
+  auto_trade_enabled: boolean;
 }
 
 export interface SymbolInfo {
@@ -284,4 +352,50 @@ export interface AIPerformance {
   best_symbol: SymbolPerformance | null;
   worst_symbol: SymbolPerformance | null;
   by_symbol: SymbolPerformance[];
+}
+
+export interface AdminTrade {
+  id: number;
+  user_email: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  quantity: number;
+  price: number;
+  realized_pnl: number | null;
+  confidence: number | null;
+  source: string;
+  executed_at: string;
+}
+
+export interface AIEngineConfig {
+  rsi_weight: number;
+  macd_weight: number;
+  ema_weight: number;
+  bollinger_weight: number;
+  sma_weight: number;
+  buy_threshold: number;
+  sell_threshold: number;
+  autopilot_confidence_floor: number;
+  updated_at: string;
+}
+
+export type AIEngineConfigInput = Omit<AIEngineConfig, "updated_at">;
+
+export interface NewsItem {
+  id: string;
+  symbol: string;
+  headline: string;
+  summary: string;
+  sentiment: "positive" | "negative" | "neutral";
+  impact_score: number;
+  published_at: string;
+}
+
+export interface ContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
 }

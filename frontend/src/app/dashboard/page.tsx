@@ -2,6 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Bot } from "lucide-react";
 import {
   api,
   AIRecommendation,
@@ -30,7 +32,7 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { token, refreshUser } = useAuth();
+  const { token, user, refreshUser } = useAuth();
   const searchParams = useSearchParams();
 
   const [symbols, setSymbols] = useState<SymbolInfo[]>([]);
@@ -140,6 +142,25 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      {user && (
+        <Link
+          href="/dashboard/settings"
+          className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors ${
+            user.auto_trade_enabled
+              ? "border-accent/30 bg-accent/10 hover:bg-accent/15"
+              : "border-border bg-surface hover:bg-surface-2"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Bot size={16} className={user.auto_trade_enabled ? "text-accent" : "text-muted"} />
+            <span className={user.auto_trade_enabled ? "text-accent font-medium" : "text-muted"}>
+              AI Autopilot: {user.auto_trade_enabled ? "ON — trading on your behalf" : "OFF"}
+            </span>
+          </span>
+          <span className="text-xs text-muted underline">Manage in Settings</span>
+        </Link>
+      )}
+
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         <StatCard
           label="Portfolio Equity"

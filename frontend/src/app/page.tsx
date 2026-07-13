@@ -12,6 +12,8 @@ import {
   ArrowRight,
   PlayCircle,
 } from "lucide-react";
+import LandingNav from "@/components/LandingNav";
+import LandingFooter from "@/components/LandingFooter";
 
 const FEATURES = [
   {
@@ -58,50 +60,14 @@ const STEPS = [
 export default function LandingPage() {
   return (
     <div className="flex-1">
-      <Nav />
+      <LandingNav />
       <Hero />
       <Features />
       <HowItWorks />
       <DashboardPreview />
       <CallToAction />
-      <Footer />
+      <LandingFooter />
     </div>
-  );
-}
-
-function Nav() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-accent">
-            <Bot size={18} />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">
-            AI Trading Mentor
-          </span>
-        </div>
-        <nav className="hidden gap-8 text-sm text-muted md:flex">
-          <a href="#features" className="hover:text-foreground">Features</a>
-          <a href="#how-it-works" className="hover:text-foreground">How it Works</a>
-          <a href="#dashboard-preview" className="hover:text-foreground">Dashboard</a>
-        </nav>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="text-sm text-muted hover:text-foreground"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/register"
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-2 transition-colors"
-          >
-            Start Free Demo
-          </Link>
-        </div>
-      </div>
-    </header>
   );
 }
 
@@ -298,16 +264,3 @@ function CallToAction() {
   );
 }
 
-function Footer() {
-  return (
-    <footer className="border-t border-border px-6 py-10 text-sm text-muted">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
-        <p>© {new Date().getFullYear()} AI Trading Mentor — Demo Project</p>
-        <p>
-          Educational demo only. Not financial advice. No real funds are ever
-          used.
-        </p>
-      </div>
-    </footer>
-  );
-}

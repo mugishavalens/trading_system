@@ -15,12 +15,17 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.replace("/");
+    } else if (user.role === "admin") {
+      // Admin accounts are for platform management only — they don't trade,
+      // so they have no business in the trading dashboard.
+      router.replace("/admin");
     }
   }, [loading, user, router]);
 
-  if (loading || !user) {
+  if (loading || !user || user.role === "admin") {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted">
         Loading...

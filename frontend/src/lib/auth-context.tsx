@@ -13,14 +13,14 @@ interface AuthContextValue {
   token: string | null;
   user: UserResponse | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserResponse>;
   register: (payload: {
     full_name: string;
     email: string;
     password: string;
     experience_level: string;
     risk_profile: string;
-  }) => Promise<void>;
+  }) => Promise<UserResponse>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -38,10 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const u = await api.me(tok);
       setUser(u);
-    } catch {
+      return u;
+    } catch (err) {
       setUser(null);
       setToken(null);
       localStorage.removeItem(STORAGE_KEY);
+      throw err;
     }
   }, []);
 
@@ -49,7 +51,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       setToken(stored);
-      loadUser(stored).finally(() => setLoading(false));
+      loadUser(stored)
+        .catch(() => {})
+        .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
@@ -60,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.login({ email, password });
       localStorage.setItem(STORAGE_KEY, res.access_token);
       setToken(res.access_token);
-      await loadUser(res.access_token);
+      return loadUser(res.access_token);
     },
     [loadUser]
   );
@@ -76,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.register(payload);
       localStorage.setItem(STORAGE_KEY, res.access_token);
       setToken(res.access_token);
-      await loadUser(res.access_token);
+      return loadUser(res.access_token);
     },
     [loadUser]
   );

@@ -34,9 +34,21 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     cash_balance: float
+    auto_trade_enabled: bool
 
     class Config:
         from_attributes = True
+
+
+class ProfileUpdateRequest(BaseModel):
+    experience_level: ExperienceLevel | None = None
+    risk_profile: RiskProfile | None = None
+    auto_trade_enabled: bool | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)
 
 
 # ---- Market data ----
@@ -215,3 +227,74 @@ class AIPerformanceResponse(BaseModel):
     best_symbol: SymbolPerformance | None
     worst_symbol: SymbolPerformance | None
     by_symbol: list[SymbolPerformance]
+
+
+class AdminTradeResponse(BaseModel):
+    id: int
+    user_email: str
+    symbol: str
+    side: TradeSide
+    quantity: float
+    price: float
+    realized_pnl: float | None
+    confidence: float | None
+    source: str
+    executed_at: datetime.datetime
+
+
+class AIEngineConfigResponse(BaseModel):
+    rsi_weight: float
+    macd_weight: float
+    ema_weight: float
+    bollinger_weight: float
+    sma_weight: float
+    buy_threshold: float
+    sell_threshold: float
+    autopilot_confidence_floor: float
+    updated_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AIEngineConfigUpdateRequest(BaseModel):
+    rsi_weight: float = Field(ge=0, le=1)
+    macd_weight: float = Field(ge=0, le=1)
+    ema_weight: float = Field(ge=0, le=1)
+    bollinger_weight: float = Field(ge=0, le=1)
+    sma_weight: float = Field(ge=0, le=1)
+    buy_threshold: float = Field(ge=0, le=1)
+    sell_threshold: float = Field(ge=-1, le=0)
+    autopilot_confidence_floor: float = Field(ge=50, le=100)
+
+
+# ---- News ----
+
+class NewsItemResponse(BaseModel):
+    id: str
+    symbol: str
+    headline: str
+    summary: str
+    sentiment: str  # "positive" | "negative" | "neutral"
+    impact_score: int  # 1-10
+    published_at: datetime.datetime
+
+
+# ---- Contact ----
+
+class ContactMessageCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    message: str = Field(min_length=1, max_length=5000)
+
+
+class ContactMessageResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    message: str
+    created_at: datetime.datetime
+    is_read: bool
+
+    class Config:
+        from_attributes = True

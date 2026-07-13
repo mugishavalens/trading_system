@@ -3,13 +3,18 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..ai_config_service import get_ai_config
 from ..database import get_db
-from ..models import Trade, User, UserRole
+from ..models import ContactMessage, Trade, User, UserRole
 from ..portfolio_service import compute_equity
 from ..schemas import (
     AdminStatsResponse,
+    AdminTradeResponse,
     AdminUserResponse,
+    AIEngineConfigResponse,
+    AIEngineConfigUpdateRequest,
     AIPerformanceResponse,
+    ContactMessageResponse,
     SymbolPerformance,
 )
 from ..security import get_current_admin
@@ -17,30 +22,21 @@ from ..security import get_current_admin
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
-@router.get("/users", response_model=list[AdminUserResponse])
-def list_users(
-    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
-):
-    users = db.query(User).order_by(User.created_at.desc()).all()
-    result = []
-    for user in users:
-        trade_count = db.query(Trade).filter(Trade.user_id == user.id).count()
-        result.append(
-            AdminUserResponse(
-                id=user.id,
-                full_name=user.full_name,
-                email=user.email,
-                experience_level=user.experience_level,
-                risk_profile=user.risk_profile,
-                role=user.role,
-                is_active=user.is_active,
-                cash_balance=round(user.cash_balance, 2),
-                created_at=user.created_at,
-                trade_count=trade_count,
-                equity=round(compute_equity(db, user), 2),
-            )
-        )
-    return result
+def _to_admin_user_response(db: Session, user: User) -> AdminUserResponse:
+    trade_count = db.query(Trade).filter(Trade.user_id == user.id).count()
+    return AdminUserResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        experience_level=user.experience_level,
+        risk_profile=user.risk_profile,
+        role=user.role,
+        is_active=user.is_active,
+        cash_balance=round(user.cash_balance, 2),
+        created_at=user.created_at,
+        trade_count=trade_count,
+        equity=round(compute_equity(db, user), 2),
+    )
 
 
 def _get_target_user(db: Session, user_id: int) -> User:
@@ -48,6 +44,14 @@ def _get_target_user(db: Session, user_id: int) -> User:
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@router.get("/users", response_model=list[AdminUserResponse])
+def list_users(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [_to_admin_user_response(db, u) for u in users]
 
 
 @router.post("/users/{user_id}/suspend", response_model=AdminUserResponse)
@@ -62,20 +66,7 @@ def toggle_suspend(
     user.is_active = not user.is_active
     db.commit()
     db.refresh(user)
-    trade_count = db.query(Trade).filter(Trade.user_id == user.id).count()
-    return AdminUserResponse(
-        id=user.id,
-        full_name=user.full_name,
-        email=user.email,
-        experience_level=user.experience_level,
-        risk_profile=user.risk_profile,
-        role=user.role,
-        is_active=user.is_active,
-        cash_balance=round(user.cash_balance, 2),
-        created_at=user.created_at,
-        trade_count=trade_count,
-        equity=round(compute_equity(db, user), 2),
-    )
+    return _to_admin_user_response(db, user)
 
 
 @router.post("/users/{user_id}/promote", response_model=AdminUserResponse)
@@ -86,22 +77,10 @@ def promote_user(
 ):
     user = _get_target_user(db, user_id)
     user.role = UserRole.admin
+    user.auto_trade_enabled = False  # admins don't trade
     db.commit()
     db.refresh(user)
-    trade_count = db.query(Trade).filter(Trade.user_id == user.id).count()
-    return AdminUserResponse(
-        id=user.id,
-        full_name=user.full_name,
-        email=user.email,
-        experience_level=user.experience_level,
-        risk_profile=user.risk_profile,
-        role=user.role,
-        is_active=user.is_active,
-        cash_balance=round(user.cash_balance, 2),
-        created_at=user.created_at,
-        trade_count=trade_count,
-        equity=round(compute_equity(db, user), 2),
-    )
+    return _to_admin_user_response(db, user)
 
 
 @router.delete("/users/{user_id}")
@@ -203,3 +182,114 @@ def get_ai_performance(
         worst_symbol=worst_symbol,
         by_symbol=by_symbol,
     )
+
+
+@router.get("/activity", response_model=list[AdminTradeResponse])
+def get_activity(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    trades = (
+        db.query(Trade, User.email)
+        .join(User, Trade.user_id == User.id)
+        .order_by(Trade.executed_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        AdminTradeResponse(
+            id=trade.id,
+            user_email=email,
+            symbol=trade.symbol,
+            side=trade.side,
+            quantity=trade.quantity,
+            price=trade.price,
+            realized_pnl=trade.realized_pnl,
+            confidence=trade.confidence,
+            source=trade.source,
+            executed_at=trade.executed_at,
+        )
+        for trade, email in trades
+    ]
+
+
+@router.get("/ai-config", response_model=AIEngineConfigResponse)
+def get_ai_engine_config(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    return get_ai_config(db)
+
+
+@router.put("/ai-config", response_model=AIEngineConfigResponse)
+def update_ai_engine_config(
+    payload: AIEngineConfigUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    config = get_ai_config(db)
+    for field, value in payload.model_dump().items():
+        setattr(config, field, value)
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@router.post("/ai-config/reset", response_model=AIEngineConfigResponse)
+def reset_ai_engine_config(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    config = get_ai_config(db)
+    defaults = {
+        "rsi_weight": 0.25,
+        "macd_weight": 0.25,
+        "ema_weight": 0.25,
+        "bollinger_weight": 0.15,
+        "sma_weight": 0.10,
+        "buy_threshold": 0.15,
+        "sell_threshold": -0.15,
+        "autopilot_confidence_floor": 65.0,
+    }
+    for field, value in defaults.items():
+        setattr(config, field, value)
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@router.get("/messages", response_model=list[ContactMessageResponse])
+def list_messages(
+    db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)
+):
+    return (
+        db.query(ContactMessage).order_by(ContactMessage.created_at.desc()).all()
+    )
+
+
+@router.post("/messages/{message_id}/read", response_model=ContactMessageResponse)
+def mark_message_read(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    message = db.query(ContactMessage).filter(ContactMessage.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    message.is_read = True
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+@router.delete("/messages/{message_id}")
+def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    message = db.query(ContactMessage).filter(ContactMessage.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    db.delete(message)
+    db.commit()
+    return {"status": "deleted"}

@@ -8,7 +8,10 @@ gets shown to the user (and optionally rephrased by Claude) as "why".
 
 import datetime
 
+from sqlalchemy.orm import Session
+
 from . import indicators
+from .ai_config_service import get_ai_config
 from .market_data import market_store
 from .schemas import AIRecommendation, IndicatorSnapshot
 
@@ -17,7 +20,9 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
-def build_recommendation(symbol: str) -> AIRecommendation:
+def build_recommendation(symbol: str, db: Session) -> AIRecommendation:
+    config = get_ai_config(db)
+
     candles = market_store.get_candles(symbol, limit=180)
     df = indicators.to_dataframe(candles)
     ind = indicators.compute_all(df)
@@ -37,7 +42,7 @@ def build_recommendation(symbol: str) -> AIRecommendation:
     else:
         rsi_signal = (50 - rsi_val) / 50
         reasons.append(f"RSI is {rsi_val:.1f}, a neutral reading with no strong momentum signal.")
-    score += 0.25 * rsi_signal
+    score += config.rsi_weight * rsi_signal
 
     # MACD vs signal line
     macd_diff = ind["macd"] - ind["macd_signal"]
@@ -46,7 +51,7 @@ def build_recommendation(symbol: str) -> AIRecommendation:
         reasons.append("MACD line is above its signal line, indicating bullish momentum.")
     else:
         reasons.append("MACD line is below its signal line, indicating bearish momentum.")
-    score += 0.25 * macd_signal
+    score += config.macd_weight * macd_signal
 
     # EMA trend (20 vs 50)
     if ind["ema_20"] > ind["ema_50"]:
@@ -55,7 +60,7 @@ def build_recommendation(symbol: str) -> AIRecommendation:
     else:
         ema_signal = -1.0
         reasons.append("Short-term EMA(20) is below EMA(50), suggesting a downtrend.")
-    score += 0.25 * ema_signal
+    score += config.ema_weight * ema_signal
 
     # Bollinger bands
     band_width = ind["bollinger_upper"] - ind["bollinger_lower"]
@@ -72,7 +77,7 @@ def build_recommendation(symbol: str) -> AIRecommendation:
     else:
         bb_signal = 0.0
         reasons.append("Price is trading within the middle of its Bollinger Bands — no extreme.")
-    score += 0.15 * bb_signal
+    score += config.bollinger_weight * bb_signal
 
     # Price vs SMA20
     sma_signal = _clamp((price - ind["sma_20"]) / (ind["sma_20"] * 0.02 + 1e-6), -1, 1)
@@ -80,13 +85,13 @@ def build_recommendation(symbol: str) -> AIRecommendation:
         reasons.append("Price is above its 20-period moving average.")
     else:
         reasons.append("Price is below its 20-period moving average.")
-    score += 0.10 * sma_signal
+    score += config.sma_weight * sma_signal
 
     score = _clamp(score, -1, 1)
 
-    if score > 0.15:
+    if score > config.buy_threshold:
         action = "BUY"
-    elif score < -0.15:
+    elif score < config.sell_threshold:
         action = "SELL"
     else:
         action = "HOLD"

@@ -45,6 +45,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     cash_balance: Mapped[float] = mapped_column(Float, default=100_000.0)
+    auto_trade_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
@@ -107,3 +108,39 @@ class EquitySnapshot(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="equity_snapshots")
+
+
+class AIEngineConfig(Base):
+    """Singleton row (id=1) holding the tunable weights behind ai_engine.py.
+
+    Lets an admin adjust how much each indicator contributes to a
+    recommendation without a code deploy — the closest thing this rule-based
+    engine has to "retraining"."""
+
+    __tablename__ = "ai_engine_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rsi_weight: Mapped[float] = mapped_column(Float, default=0.25)
+    macd_weight: Mapped[float] = mapped_column(Float, default=0.25)
+    ema_weight: Mapped[float] = mapped_column(Float, default=0.25)
+    bollinger_weight: Mapped[float] = mapped_column(Float, default=0.15)
+    sma_weight: Mapped[float] = mapped_column(Float, default=0.10)
+    buy_threshold: Mapped[float] = mapped_column(Float, default=0.15)
+    sell_threshold: Mapped[float] = mapped_column(Float, default=-0.15)
+    autopilot_confidence_floor: Mapped[float] = mapped_column(Float, default=65.0)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class ContactMessage(Base):
+    __tablename__ = "contact_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, index=True
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)

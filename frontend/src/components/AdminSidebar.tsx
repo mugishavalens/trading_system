@@ -3,11 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LayoutDashboard, Users, ArrowLeftRight, ShieldCheck } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  ShieldCheck,
+  SlidersHorizontal,
+  Activity,
+  Mail,
+} from "lucide-react";
 
 const NAV = [
   { icon: LayoutDashboard, label: "Overview", href: "/admin" },
   { icon: Users, label: "Users", href: "/admin/users" },
+  { icon: SlidersHorizontal, label: "AI Settings", href: "/admin/ai-settings" },
+  { icon: Activity, label: "Activity Log", href: "/admin/activity" },
+  { icon: Mail, label: "Messages", href: "/admin/messages" },
 ];
 
 export default function AdminSidebar() {
@@ -43,13 +53,10 @@ export default function AdminSidebar() {
         })}
       </nav>
 
-      <Link
-        href="/dashboard"
-        className="mt-4 flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors"
-      >
-        <ArrowLeftRight size={18} />
-        Back to app
-      </Link>
+      <div className="mt-auto rounded-lg border border-border bg-background/60 p-3 text-xs text-muted">
+        Admin accounts manage the platform only — they don't hold demo funds
+        or place trades.
+      </div>
     </aside>
   );
 }
