@@ -1,12 +1,10 @@
 [build]
   base = "frontend"
-  command = "npm ci && npm run build"
+  command = "npm ci --include=dev && npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
-  NODE_ENV = "production"
-  NPM_FLAGS = "--include=dev"
   NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
