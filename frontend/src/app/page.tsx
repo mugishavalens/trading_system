@@ -13,12 +13,12 @@ import LandingFooter from "@/components/LandingFooter";
 import { useAuth } from "@/lib/auth-context";
 
 const FEATURES = [
-  { icon: Bot, title: "AI Market Analysis", body: "Technical indicators, trend, and volatility fused into one transparent read of the market — every time, every symbol.", gradient: "from-amber-500/20 to-orange-500/10", iconBg: "bg-amber-500/20 text-amber-400" },
-  { icon: BookOpen, title: "AI Trading Tutor", body: "Ask about RSI, Fibonacci, or Smart Money Concepts and get plain-English answers tied to live examples.", gradient: "from-blue-500/20 to-cyan-500/10", iconBg: "bg-blue-500/20 text-blue-400" },
-  { icon: Newspaper, title: "News Intelligence", body: "Headlines summarized and scored for sentiment and impact, so you know what's actually moving the market.", gradient: "from-purple-500/20 to-pink-500/10", iconBg: "bg-purple-500/20 text-purple-400" },
-  { icon: LineChart, title: "Autonomous Demo Trading", body: "Let the AI place, manage, and close trades with virtual funds — nothing here ever touches real money.", gradient: "from-green-500/20 to-emerald-500/10", iconBg: "bg-green-500/20 text-green-400" },
-  { icon: ShieldCheck, title: "Risk Management", body: "Position sizing, exposure limits, and drawdown protection are baked into every automated decision.", gradient: "from-red-500/20 to-rose-500/10", iconBg: "bg-red-500/20 text-red-400" },
-  { icon: Brain, title: "Continuous Learning", body: "The system tracks its own win rate and reasoning quality over time, in full view of the user.", gradient: "from-indigo-500/20 to-violet-500/10", iconBg: "bg-indigo-500/20 text-indigo-400" },
+  { icon: Bot,        title: "AI Market Analysis",      href: "/dashboard/markets",   body: "Technical indicators, trend, and volatility fused into one transparent read of the market — every time, every symbol.",        gradient: "from-amber-500/20 to-orange-500/10",  iconBg: "bg-amber-500/20 text-amber-400" },
+  { icon: BookOpen,   title: "AI Trading Tutor",        href: "/dashboard/assistant", body: "Ask about RSI, Fibonacci, or Smart Money Concepts and get plain-English answers tied to live examples.",                       gradient: "from-blue-500/20 to-cyan-500/10",     iconBg: "bg-blue-500/20 text-blue-400" },
+  { icon: Newspaper,  title: "News Intelligence",       href: "/news",                body: "Headlines summarized and scored for sentiment and impact, so you know what's actually moving the market.",                      gradient: "from-purple-500/20 to-pink-500/10",   iconBg: "bg-purple-500/20 text-purple-400" },
+  { icon: LineChart,  title: "Autonomous Demo Trading", href: "/dashboard",           body: "Let the AI place, manage, and close trades with virtual funds — nothing here ever touches real money.",                         gradient: "from-green-500/20 to-emerald-500/10", iconBg: "bg-green-500/20 text-green-400" },
+  { icon: ShieldCheck,title: "Risk Management",         href: "/dashboard/risk",      body: "Position sizing, exposure limits, and drawdown protection are baked into every automated decision.",                            gradient: "from-red-500/20 to-rose-500/10",      iconBg: "bg-red-500/20 text-red-400" },
+  { icon: Brain,      title: "Continuous Learning",     href: "/learn",               body: "The system tracks its own win rate and reasoning quality over time, in full view of the user.",                                  gradient: "from-indigo-500/20 to-violet-500/10", iconBg: "bg-indigo-500/20 text-indigo-400" },
 ];
 
 const STEPS = [
@@ -267,15 +267,17 @@ function Features() {
           <p className="mt-4 text-muted max-w-xl mx-auto">Everything you need to learn, analyze, and trade — in one place.</p>
         </motion.div>
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map(({ icon: Icon, title, body, gradient, iconBg }, i) => (
+          {FEATURES.map(({ icon: Icon, title, body, gradient, iconBg, href }, i) => (
             <motion.div key={title} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }} transition={{ delay: i * 0.08 }}
               className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br ${gradient} p-6 backdrop-blur-sm hover:-translate-y-1 transition-all duration-300 hover:border-white/20 hover:shadow-xl`}>
               <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${iconBg}`}><Icon size={22} /></div>
               <h3 className="mt-5 text-lg font-semibold">{title}</h3>
               <p className="mt-2 text-sm text-muted leading-relaxed">{body}</p>
-              <div className="mt-4 flex items-center gap-1 text-xs font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                Learn more <ChevronRight size={12} />
+              <div className="mt-4">
+                <Link href={href} className="flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+                  Learn more <ChevronRight size={12} />
+                </Link>
               </div>
             </motion.div>
           ))}
