@@ -118,7 +118,7 @@ function DashboardContent() {
     if (!token) return;
     let cancelled = false;
     async function loadNews() {
-      const items = await api.news(token!, 50);
+      const items = await api.news(50);
       if (!cancelled) setNews(items);
     }
     loadNews();
