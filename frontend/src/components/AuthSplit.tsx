@@ -11,8 +11,8 @@ export default function AuthSplit({
   subtitle,
 }: {
   children: React.ReactNode;
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
 }) {
   return (
     <div className="flex min-h-screen">
@@ -120,7 +120,10 @@ export default function AuthSplit({
       </div>
 
       {/* Right panel — auth form */}
-      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16 bg-background">
+      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16 bg-background relative overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10"
+          style={{ background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(245,158,11,0.05) 0%, transparent 60%)" }} />
+
         <div className="mx-auto w-full max-w-sm">
           {/* Mobile logo */}
           <Link href="/" className="mb-8 flex items-center gap-2 lg:hidden">
@@ -129,9 +132,25 @@ export default function AuthSplit({
             </div>
             <span className="font-bold">AI Trading <span className="text-accent">Mentor</span></span>
           </Link>
-          <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="mt-2 text-sm text-muted">{subtitle}</p>
-          <div className="mt-8">{children}</div>
+
+          {/* Card — title + children (flip card lives here) */}
+          <div className="rounded-3xl p-8"
+            style={{
+              background: "var(--surface)",
+              boxShadow: "var(--neumorph-shadow)",
+              border: "1px solid var(--glass-border)",
+            }}>
+            {title && <h1 className="text-2xl font-bold">{title}</h1>}
+            {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
+            <div className={title ? "mt-8" : ""}>{children}</div>
+          </div>
+
+          {/* Back to home */}
+          <div className="mt-6 text-center">
+            <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors">
+              ← Back to home
+            </Link>
+          </div>
         </div>
       </div>
     </div>

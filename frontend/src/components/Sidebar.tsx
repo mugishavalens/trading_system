@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
@@ -11,16 +9,17 @@ import {
   History,
   ShieldAlert,
   Settings,
+  ArrowLeft,
 } from "lucide-react";
 
 const NAV = [
-  { icon: Home, label: "Dashboard", href: "/dashboard" },
-  { icon: Bot, label: "AI Assistant", href: "/dashboard/assistant" },
-  { icon: LineChart, label: "Markets", href: "/dashboard/markets" },
-  { icon: Wallet, label: "Portfolio", href: "/dashboard/portfolio" },
-  { icon: History, label: "History", href: "/dashboard/history" },
-  { icon: ShieldAlert, label: "Risk", href: "/dashboard/risk" },
-  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+  { icon: Home,       label: "Dashboard",   href: "/dashboard" },
+  { icon: Bot,        label: "AI Assistant", href: "/dashboard/assistant" },
+  { icon: LineChart,  label: "Markets",      href: "/dashboard/markets" },
+  { icon: Wallet,     label: "Portfolio",    href: "/dashboard/portfolio" },
+  { icon: History,    label: "History",      href: "/dashboard/history" },
+  { icon: ShieldAlert,label: "Risk",         href: "/dashboard/risk" },
+  { icon: Settings,   label: "Settings",     href: "/dashboard/settings" },
 ];
 
 export default function Sidebar() {
@@ -28,12 +27,13 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface/60 p-4 md:flex">
-      <div className="flex items-center gap-2 px-2 py-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-accent">
+      {/* Clickable logo → home */}
+      <Link href="/" className="flex items-center gap-2 px-2 py-2 group">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-accent group-hover:bg-accent/30 transition-colors">
           <Bot size={18} />
         </div>
-        <span className="font-semibold">Trading Mentor</span>
-      </div>
+        <span className="font-semibold group-hover:text-accent transition-colors">Trading Mentor</span>
+      </Link>
 
       <nav className="mt-6 flex flex-col gap-1">
         {NAV.map(({ icon: Icon, label, href }) => {
@@ -55,6 +55,14 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Back to landing page */}
+      <div className="mt-4 border-t border-border pt-4">
+        <Link href="/"
+          className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors">
+          <ArrowLeft size={16} /> Back to Home
+        </Link>
+      </div>
 
       <div className="mt-auto rounded-lg border border-border bg-background/60 p-3 text-xs text-muted">
         Demo mode — virtual funds only. Nothing here is financial advice.
