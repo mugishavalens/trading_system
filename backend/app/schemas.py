@@ -113,6 +113,32 @@ class ExplainResponse(BaseModel):
     generated_by: str  # "claude" | "template"
 
 
+# ---- AI Debate ----
+
+class NewsAgentTurn(BaseModel):
+    lean: str  # "bullish" | "bearish" | "neutral"
+    sentiment_score: float
+    reason: str
+
+
+class RiskAgentTurn(BaseModel):
+    verdict: str  # "proceed" | "reduce" | "veto"
+    size_multiplier: float
+    reason: str
+
+
+class DebateResult(BaseModel):
+    symbol: str
+    market_analyst: AIRecommendation
+    news: NewsAgentTurn
+    risk: RiskAgentTurn
+    final_action: str  # BUY | SELL | HOLD
+    final_confidence: float
+    coach_summary: str
+    generated_by: str  # "claude" | "template"
+    generated_at: datetime.datetime
+
+
 # ---- Trading ----
 
 class ExecuteTradeRequest(BaseModel):

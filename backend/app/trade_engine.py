@@ -40,6 +40,7 @@ def place_trade(
     confidence: float | None = None,
     risk_level: str | None = None,
     reason: str | None = None,
+    debate_transcript: str | None = None,
 ) -> Trade:
     if user.role == UserRole.admin:
         raise TradeError("Admin accounts are for platform management and cannot trade")
@@ -92,6 +93,7 @@ def place_trade(
         risk_level=risk_level,
         reason=reason,
         source=source,
+        debate_transcript=debate_transcript,
     )
     db.add(trade)
     db.commit()
@@ -100,14 +102,18 @@ def place_trade(
 
 
 def size_ai_trade(
-    db: Session, user: User, symbol: str, rec: AIRecommendation
+    db: Session, user: User, symbol: str, rec: AIRecommendation, size_multiplier: float = 1.0
 ) -> tuple[TradeSide, float]:
     """Turn an AI recommendation into a concrete (side, quantity), sized by
-    the user's risk profile and the recommendation's own confidence."""
+    the user's risk profile and the recommendation's own confidence.
+
+    size_multiplier comes from the Risk Agent's verdict (1.0 proceed, 0.5
+    reduce, 0.0 veto — though a veto should already have been turned into a
+    HOLD by the debate orchestrator before this is called)."""
     if rec.action == "HOLD":
         raise TradeSkipped("AI is currently recommending HOLD — nothing to execute")
 
-    allocation_pct = RISK_ALLOCATION[user.risk_profile] * (rec.confidence / 100)
+    allocation_pct = RISK_ALLOCATION[user.risk_profile] * (rec.confidence / 100) * size_multiplier
     side = TradeSide.buy if rec.action == "BUY" else TradeSide.sell
 
     if side == TradeSide.buy:

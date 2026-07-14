@@ -1,4 +1,4 @@
-const COLORS = ["#f59e0b", "#22c55e", "#38bdf8", "#a78bfa", "#f472b6", "#fb923c"];
+import { SERIES_PALETTE as COLORS } from "@/lib/chartTheme";
 
 export default function AllocationPie({
   slices,
@@ -26,7 +26,7 @@ export default function AllocationPie({
           cy="80"
           r={radius}
           fill="none"
-          stroke="#1e293b"
+          stroke="var(--border)"
           strokeWidth="20"
         />
         {slices.map((s, i) => {

@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { LogOut, ShieldCheck, Sun, Moon } from "lucide-react";
 import { api, AdminHealth } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 
 const HEALTH_POLL_MS = 15000;
 
 export default function AdminTopbar() {
   const { user, token, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [health, setHealth] = useState<AdminHealth | null>(null);
 
   useEffect(() => {
@@ -62,6 +64,14 @@ export default function AdminTopbar() {
         <span className="flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent">
           <ShieldCheck size={14} /> Platform Admin
         </span>
+        <button
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          suppressHydrationWarning
+          className="rounded-lg border border-border p-2.5 text-muted hover:text-foreground hover:bg-surface transition-colors"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <button
           onClick={logout}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors"

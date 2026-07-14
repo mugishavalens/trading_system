@@ -8,21 +8,25 @@ import {
   UTCTimestamp,
 } from "lightweight-charts";
 import { Candle } from "@/lib/api";
+import { chartColors } from "@/lib/chartTheme";
+import { useTheme } from "@/lib/theme-context";
 
 export default function PriceChart({ candles }: { candles: Candle[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const colors = chartColors(theme);
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
+        textColor: colors.textColor,
       },
       grid: {
-        vertLines: { color: "#1e293b" },
-        horzLines: { color: "#1e293b" },
+        vertLines: { color: colors.gridColor },
+        horzLines: { color: colors.gridColor },
       },
       width: containerRef.current.clientWidth,
       height: 320,
@@ -30,11 +34,11 @@ export default function PriceChart({ candles }: { candles: Candle[] }) {
     });
 
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
+      upColor: colors.success,
+      downColor: colors.danger,
       borderVisible: false,
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+      wickUpColor: colors.success,
+      wickDownColor: colors.danger,
     });
 
     series.setData(
@@ -60,7 +64,7 @@ export default function PriceChart({ candles }: { candles: Candle[] }) {
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [candles]);
+  }, [candles, theme]);
 
   return <div ref={containerRef} className="w-full" />;
 }

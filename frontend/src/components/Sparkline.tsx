@@ -24,11 +24,15 @@ export default function Sparkline({
     .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-12 w-full" preserveAspectRatio="none">
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={positive ? "h-12 w-full text-success" : "h-12 w-full text-danger"}
+      preserveAspectRatio="none"
+    >
       <polyline
         points={points}
         fill="none"
-        stroke={positive ? "#22c55e" : "#ef4444"}
+        stroke="currentColor"
         strokeWidth={2}
         vectorEffect="non-scaling-stroke"
       />

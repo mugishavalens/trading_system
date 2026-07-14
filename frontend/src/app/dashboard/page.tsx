@@ -9,6 +9,7 @@ import {
   AIRecommendation,
   ApiError,
   Candle,
+  DebateResult,
   NewsItem,
   PendingTrade,
   Portfolio,
@@ -57,6 +58,9 @@ function DashboardContent() {
   const [explainedAction, setExplainedAction] = useState<string | null>(null);
   const [loadingExplain, setLoadingExplain] = useState(false);
 
+  const [debate, setDebate] = useState<DebateResult | null>(null);
+  const [loadingDebate, setLoadingDebate] = useState(false);
+
   const [executing, setExecuting] = useState(false);
   const [tradeError, setTradeError] = useState<string | null>(null);
 
@@ -104,6 +108,7 @@ function DashboardContent() {
   useEffect(() => {
     setExplanation(null);
     setExplanationSource(null);
+    setDebate(null);
     refreshSymbolData();
     const id = setInterval(refreshSymbolData, POLL_MS);
     return () => clearInterval(id);
@@ -171,6 +176,18 @@ function DashboardContent() {
       );
     } finally {
       setLoadingExplain(false);
+    }
+  }
+
+  async function handleShowDebate() {
+    if (!token) return;
+    setLoadingDebate(true);
+    try {
+      setDebate(await api.debate(token, selected));
+    } catch {
+      // Debate is a supplementary view — leave the recommendation card usable if it fails.
+    } finally {
+      setLoadingDebate(false);
     }
   }
 
@@ -336,6 +353,9 @@ function DashboardContent() {
               }
               loadingExplain={loadingExplain}
               onExplain={handleExplain}
+              debate={debate}
+              loadingDebate={loadingDebate}
+              onShowDebate={handleShowDebate}
               executing={executing}
               onExecuteAi={handleExecuteAi}
               tradeError={tradeError}

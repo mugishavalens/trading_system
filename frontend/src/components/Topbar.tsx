@@ -1,10 +1,12 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { LogOut, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 
 export default function Topbar() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="flex items-center justify-between border-b border-border px-6 py-4">
@@ -32,6 +34,14 @@ export default function Topbar() {
               : "—"}
           </p>
         </div>
+        <button
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          suppressHydrationWarning
+          className="rounded-lg border border-border p-2.5 text-muted hover:text-foreground hover:bg-surface transition-colors"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <button
           onClick={logout}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors"

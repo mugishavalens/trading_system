@@ -2,13 +2,19 @@
 
 import { useState } from "react";
 import clsx from "clsx";
-import { Sparkles, Loader2 } from "lucide-react";
-import { AIRecommendation } from "@/lib/api";
+import { Sparkles, Loader2, ChevronDown, ShieldAlert, Newspaper, Bot } from "lucide-react";
+import { AIRecommendation, DebateResult } from "@/lib/api";
 
 const ACTION_STYLES: Record<string, string> = {
   BUY: "bg-success/15 text-success border-success/30",
   SELL: "bg-danger/15 text-danger border-danger/30",
   HOLD: "bg-surface-2 text-muted border-border",
+};
+
+const VERDICT_STYLES: Record<string, string> = {
+  proceed: "text-success",
+  reduce: "text-accent",
+  veto: "text-danger",
 };
 
 export default function RecommendationCard({
@@ -18,6 +24,9 @@ export default function RecommendationCard({
   explanationStale,
   loadingExplain,
   onExplain,
+  debate,
+  loadingDebate,
+  onShowDebate,
   executing,
   onExecuteAi,
   tradeError,
@@ -29,12 +38,16 @@ export default function RecommendationCard({
   explanationStale: boolean;
   loadingExplain: boolean;
   onExplain: () => void;
+  debate: DebateResult | null;
+  loadingDebate: boolean;
+  onShowDebate: () => void;
   executing: boolean;
   onExecuteAi: () => void;
   tradeError: string | null;
   onManualTrade: (side: "BUY" | "SELL", quantity: number) => void;
 }) {
   const [manualQty, setManualQty] = useState("0.01");
+  const [debateOpen, setDebateOpen] = useState(false);
 
   return (
     <div className="glass rounded-2xl p-6">
@@ -102,6 +115,66 @@ export default function RecommendationCard({
           <p className="mt-1.5 text-foreground/90">{explanation}</p>
         </div>
       )}
+
+      <div className="mt-4 border-t border-border pt-3">
+        <button
+          onClick={() => {
+            setDebateOpen((open) => !open);
+            if (!debate) onShowDebate();
+          }}
+          className="flex w-full items-center justify-between text-xs text-muted hover:text-foreground transition-colors"
+        >
+          <span>Show AI Debate — how the agents reached this call</span>
+          <ChevronDown
+            size={14}
+            className={clsx("transition-transform", debateOpen && "rotate-180")}
+          />
+        </button>
+
+        {debateOpen && (
+          <div className="mt-3 space-y-3">
+            {loadingDebate && !debate && (
+              <p className="flex items-center gap-2 text-sm text-muted">
+                <Loader2 size={14} className="animate-spin" /> Running the debate...
+              </p>
+            )}
+            {debate && (
+              <>
+                <div className="flex items-start gap-2 text-sm">
+                  <Newspaper size={14} className="mt-0.5 shrink-0 text-muted" />
+                  <p>
+                    <span className="font-medium">News Agent</span> — {debate.news.lean} (
+                    {debate.news.sentiment_score >= 0 ? "+" : ""}
+                    {debate.news.sentiment_score.toFixed(2)}): {debate.news.reason}
+                  </p>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <ShieldAlert size={14} className="mt-0.5 shrink-0 text-muted" />
+                  <p>
+                    <span className="font-medium">Risk Agent</span> —{" "}
+                    <span className={clsx("font-medium uppercase", VERDICT_STYLES[debate.risk.verdict])}>
+                      {debate.risk.verdict}
+                    </span>
+                    : {debate.risk.reason}
+                  </p>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <Bot size={14} className="mt-0.5 shrink-0 text-accent" />
+                  <p>
+                    <span className="font-medium">Coach</span> — {debate.coach_summary}
+                  </p>
+                </div>
+                {debate.final_action !== debate.market_analyst.action && (
+                  <p className="text-xs text-accent">
+                    Note: the Risk Agent overrode the Analyst&rsquo;s {debate.market_analyst.action} call —
+                    final action is {debate.final_action}.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <p className="mt-4 text-xs text-muted">{rec.disclaimer}</p>
 

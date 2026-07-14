@@ -15,6 +15,10 @@ SYMBOLS = {
     "SOL/USD": {"name": "Solana", "asset_class": "crypto", "base_price": 145, "vol": 0.03},
     "AAPL": {"name": "Apple Inc.", "asset_class": "stock", "base_price": 210, "vol": 0.011},
     "TSLA": {"name": "Tesla Inc.", "asset_class": "stock", "base_price": 250, "vol": 0.025},
+    "EUR/USD": {"name": "Euro / US Dollar", "asset_class": "forex", "base_price": 1.0850, "vol": 0.004},
+    "GBP/USD": {"name": "British Pound / US Dollar", "asset_class": "forex", "base_price": 1.2650, "vol": 0.005},
+    "USD/JPY": {"name": "US Dollar / Japanese Yen", "asset_class": "forex", "base_price": 155.30, "vol": 0.004},
+    "AUD/USD": {"name": "Australian Dollar / US Dollar", "asset_class": "forex", "base_price": 0.6550, "vol": 0.005},
 }
 
 HISTORY_LENGTH = 180

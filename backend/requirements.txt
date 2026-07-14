@@ -12,3 +12,4 @@ numpy==2.2.1
 anthropic==0.40.0
 python-dotenv==1.0.1
 alembic==1.14.0
+pytest==8.3.4

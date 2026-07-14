@@ -3,21 +3,25 @@
 import { useEffect, useRef } from "react";
 import { createChart, LineSeries, ColorType, UTCTimestamp } from "lightweight-charts";
 import { EquitySnapshot } from "@/lib/api";
+import { chartColors } from "@/lib/chartTheme";
+import { useTheme } from "@/lib/theme-context";
 
 export default function EquityChart({ snapshots }: { snapshots: EquitySnapshot[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const colors = chartColors(theme);
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
+        textColor: colors.textColor,
       },
       grid: {
-        vertLines: { color: "#1e293b" },
-        horzLines: { color: "#1e293b" },
+        vertLines: { color: colors.gridColor },
+        horzLines: { color: colors.gridColor },
       },
       width: containerRef.current.clientWidth,
       height: 260,
@@ -25,7 +29,7 @@ export default function EquityChart({ snapshots }: { snapshots: EquitySnapshot[]
     });
 
     const series = chart.addSeries(LineSeries, {
-      color: "#f59e0b",
+      color: colors.accent,
       lineWidth: 2,
     });
 
@@ -49,7 +53,7 @@ export default function EquityChart({ snapshots }: { snapshots: EquitySnapshot[]
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [snapshots]);
+  }, [snapshots, theme]);
 
   if (snapshots.length < 2) {
     return (

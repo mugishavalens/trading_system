@@ -109,6 +109,7 @@ class Trade(Base):
     risk_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="manual")  # manual | ai_auto
+    debate_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
@@ -168,6 +169,7 @@ class PendingTrade(Base):
     confidence: Mapped[float] = mapped_column(Float)
     risk_level: Mapped[str] = mapped_column(String(20))
     reason: Mapped[str] = mapped_column(Text)
+    debate_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[PendingTradeStatus] = mapped_column(
         Enum(PendingTradeStatus), default=PendingTradeStatus.pending
     )

@@ -114,6 +114,9 @@ export const api = {
       { token }
     ),
 
+  debate: (token: string, symbol: string) =>
+    request<DebateResult>(`/api/ai/debate/${encodeURIComponent(symbol)}`, { token }),
+
   executeTrade: (
     token: string,
     payload: { symbol: string; side: "BUY" | "SELL"; quantity: number }
@@ -331,6 +334,30 @@ export interface AIRecommendation {
   price: number;
   generated_at: string;
   disclaimer: string;
+}
+
+export interface NewsAgentTurn {
+  lean: "bullish" | "bearish" | "neutral";
+  sentiment_score: number;
+  reason: string;
+}
+
+export interface RiskAgentTurn {
+  verdict: "proceed" | "reduce" | "veto";
+  size_multiplier: number;
+  reason: string;
+}
+
+export interface DebateResult {
+  symbol: string;
+  market_analyst: AIRecommendation;
+  news: NewsAgentTurn;
+  risk: RiskAgentTurn;
+  final_action: "BUY" | "SELL" | "HOLD";
+  final_confidence: number;
+  coach_summary: string;
+  generated_by: "claude" | "template";
+  generated_at: string;
 }
 
 export interface Trade {

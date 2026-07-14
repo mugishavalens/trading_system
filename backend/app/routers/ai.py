@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..agents import debate
 from ..ai_engine import build_recommendation
 from ..database import get_db
 from ..explain import generate_explanation
 from ..market_data import SYMBOLS
 from ..models import User
-from ..schemas import AIRecommendation, ExplainResponse
+from ..schemas import AIRecommendation, DebateResult, ExplainResponse
 from ..security import get_current_user
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -40,3 +41,11 @@ def explain(
     rec = build_recommendation(symbol, db)
     text, source = generate_explanation(rec)
     return ExplainResponse(symbol=symbol, explanation=text, generated_by=source)
+
+
+@router.get("/debate/{symbol:path}", response_model=DebateResult)
+def get_debate(
+    symbol: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _validate_symbol(symbol)
+    return debate.evaluate(symbol, db, current_user)

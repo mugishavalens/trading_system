@@ -3,21 +3,25 @@
 import { useEffect, useRef } from "react";
 import { createChart, HistogramSeries, ColorType, UTCTimestamp } from "lightweight-charts";
 import { DateCount } from "@/lib/api";
+import { chartColors } from "@/lib/chartTheme";
+import { useTheme } from "@/lib/theme-context";
 
 export default function SignupsChart({ data }: { data: DateCount[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const colors = chartColors(theme);
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
+        textColor: colors.textColor,
       },
       grid: {
-        vertLines: { color: "#1e293b" },
-        horzLines: { color: "#1e293b" },
+        vertLines: { color: colors.gridColor },
+        horzLines: { color: colors.gridColor },
       },
       width: containerRef.current.clientWidth,
       height: 220,
@@ -25,7 +29,7 @@ export default function SignupsChart({ data }: { data: DateCount[] }) {
     });
 
     const series = chart.addSeries(HistogramSeries, {
-      color: "#f59e0b",
+      color: colors.accent,
     });
 
     series.setData(
@@ -48,7 +52,7 @@ export default function SignupsChart({ data }: { data: DateCount[] }) {
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [data]);
+  }, [data, theme]);
 
   if (data.length === 0) {
     return (

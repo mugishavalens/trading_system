@@ -79,7 +79,7 @@ function Hero() {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(60% 50% at 50% 0%, rgba(245,158,11,0.12) 0%, rgba(2,6,23,0) 70%)",
+            "radial-gradient(60% 50% at 50% 0%, rgba(245,158,11,0.12) 0%, var(--background) 70%)",
         }}
       />
       <div className="mx-auto max-w-4xl text-center">

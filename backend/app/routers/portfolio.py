@@ -7,10 +7,14 @@ from ..config import settings
 from ..database import get_db
 from ..market_data import market_store
 from ..models import EquitySnapshot, Position, User
-from ..portfolio_service import compute_win_rate
+from ..portfolio_service import (
+    CONCENTRATION_TARGET_PCT,
+    CONCENTRATION_WARNING_PCT,
+    compute_exposures,
+    compute_win_rate,
+)
 from ..schemas import (
     EquitySnapshotResponse,
-    ExposureItem,
     PortfolioResponse,
     PortfolioRiskResponse,
     PositionResponse,
@@ -92,30 +96,11 @@ def get_portfolio(
     )
 
 
-CONCENTRATION_WARNING_PCT = 30.0
-CONCENTRATION_TARGET_PCT = 20.0
-
-
 @router.get("/risk", response_model=PortfolioRiskResponse)
 def get_portfolio_risk(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    positions = db.query(Position).filter(Position.user_id == current_user.id).all()
-
-    values = {pos.symbol: market_store.get_last_price(pos.symbol) * pos.quantity for pos in positions}
-    positions_value = sum(values.values())
-    equity = current_user.cash_balance + positions_value
-
-    exposures = [
-        ExposureItem(
-            symbol=symbol,
-            value=round(value, 2),
-            pct_of_equity=round((value / equity * 100) if equity else 0, 1),
-        )
-        for symbol, value in values.items()
-    ]
-    exposures.sort(key=lambda e: e.pct_of_equity, reverse=True)
-
+    exposures = compute_exposures(db, current_user)
     largest = exposures[0].pct_of_equity if exposures else 0.0
 
     recommendations: list[str] = []

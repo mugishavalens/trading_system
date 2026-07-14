@@ -21,7 +21,7 @@ export default function AuthSplit({
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(50% 50% at 30% 20%, rgba(245,158,11,0.15) 0%, rgba(2,6,23,0) 70%)",
+              "radial-gradient(50% 50% at 30% 20%, rgba(245,158,11,0.15) 0%, var(--surface) 70%)",
           }}
         />
         <Link href="/" className="relative z-10 flex items-center gap-2">

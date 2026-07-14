@@ -11,8 +11,8 @@ import asyncio
 import datetime
 import logging
 
+from .agents import debate
 from .ai_config_service import get_ai_config
-from .ai_engine import build_recommendation
 from .database import SessionLocal
 from .market_data import SYMBOLS
 from .models import PendingTrade, Trade, TradingMode, User, UserRole
@@ -91,14 +91,18 @@ def run_autopilot_once() -> tuple[int, int]:
         for user in users:
             for symbol in SYMBOLS:
                 try:
-                    rec = build_recommendation(symbol, db)
-                    if rec.confidence < config.autopilot_confidence_floor:
+                    result = debate.evaluate(symbol, db, user)
+                    rec = result.market_analyst
+                    if result.final_action == "HOLD":
+                        # Genuine HOLD or a risk-agent veto — either way, nothing to do.
+                        continue
+                    if result.final_confidence < config.autopilot_confidence_floor:
                         continue
 
                     if user.trading_mode == TradingMode.assisted:
                         if _recently_proposed(db, user.id, symbol):
                             continue
-                        side, quantity = size_ai_trade(db, user, symbol, rec)
+                        side, quantity = size_ai_trade(db, user, symbol, rec, result.risk.size_multiplier)
                         db.add(
                             PendingTrade(
                                 user_id=user.id,
@@ -108,24 +112,26 @@ def run_autopilot_once() -> tuple[int, int]:
                                 confidence=rec.confidence,
                                 risk_level=rec.risk_level,
                                 reason="; ".join(rec.reasons[:3]),
+                                debate_transcript=result.model_dump_json(),
                             )
                         )
                         db.commit()
                         trades_proposed += 1
                         logger.info(
-                            "autopilot: proposed %s %s %.4f %s (confidence %.1f)",
+                            "autopilot: proposed %s %s %.4f %s (confidence %.1f, risk %s)",
                             user.email,
                             side.value,
                             quantity,
                             symbol,
                             rec.confidence,
+                            result.risk.verdict,
                         )
                         continue
 
                     # autonomous
                     if _recently_auto_traded(db, user.id, symbol):
                         continue
-                    side, quantity = size_ai_trade(db, user, symbol, rec)
+                    side, quantity = size_ai_trade(db, user, symbol, rec, result.risk.size_multiplier)
                     place_trade(
                         db,
                         user,
@@ -136,15 +142,17 @@ def run_autopilot_once() -> tuple[int, int]:
                         confidence=rec.confidence,
                         risk_level=rec.risk_level,
                         reason="; ".join(rec.reasons[:3]),
+                        debate_transcript=result.model_dump_json(),
                     )
                     trades_placed += 1
                     logger.info(
-                        "autopilot: %s %s %.4f %s (confidence %.1f)",
+                        "autopilot: %s %s %.4f %s (confidence %.1f, risk %s)",
                         user.email,
                         side.value,
                         quantity,
                         symbol,
                         rec.confidence,
+                        result.risk.verdict,
                     )
                 except (TradeSkipped, TradeError):
                     continue

@@ -3,6 +3,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..agents import debate
 from ..ai_engine import build_recommendation
 from ..database import get_db
 from ..models import PendingTrade, PendingTradeStatus, Trade, User
@@ -42,9 +43,18 @@ def execute_ai_recommendation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    rec = build_recommendation(symbol, db)
+    result = debate.evaluate(symbol, db, current_user)
+    if result.final_action == "HOLD":
+        detail = (
+            "AI is currently recommending HOLD — nothing to execute"
+            if result.risk.verdict != "veto"
+            else f"Risk Agent vetoed this trade: {result.risk.reason}"
+        )
+        raise HTTPException(status_code=400, detail=detail)
+
+    rec = result.market_analyst
     try:
-        side, quantity = size_ai_trade(db, current_user, symbol, rec)
+        side, quantity = size_ai_trade(db, current_user, symbol, rec, result.risk.size_multiplier)
         return place_trade(
             db,
             current_user,
@@ -55,6 +65,7 @@ def execute_ai_recommendation(
             confidence=rec.confidence,
             risk_level=rec.risk_level,
             reason="; ".join(rec.reasons[:3]),
+            debate_transcript=result.model_dump_json(),
         )
     except TradeSkipped as e:
         raise HTTPException(status_code=400, detail=str(e))
