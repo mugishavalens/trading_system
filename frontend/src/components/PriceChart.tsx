@@ -11,25 +11,33 @@ import { Candle } from "@/lib/api";
 import { chartColors } from "@/lib/chartTheme";
 import { useTheme } from "@/lib/theme-context";
 
-export default function PriceChart({ candles }: { candles: Candle[] }) {
+export default function PriceChart({
+  candles,
+  expanded = false,
+}: {
+  candles: Candle[];
+  expanded?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
 
   useEffect(() => {
     if (!containerRef.current) return;
     const colors = chartColors(theme);
+    const height = expanded ? 560 : 320;
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: colors.textColor,
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: colors.gridColor },
         horzLines: { color: colors.gridColor },
       },
       width: containerRef.current.clientWidth,
-      height: 320,
+      height,
       timeScale: { timeVisible: true, secondsVisible: false },
     });
 
@@ -64,7 +72,7 @@ export default function PriceChart({ candles }: { candles: Candle[] }) {
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [candles, theme]);
+  }, [candles, theme, expanded]);
 
   return <div ref={containerRef} className="w-full" />;
 }

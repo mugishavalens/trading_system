@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Bot, Check, Sparkles, X } from "lucide-react";
+import { Bot, Check, Maximize2, Minimize2, Sparkles, X } from "lucide-react";
 import {
   api,
   AIRecommendation,
@@ -23,6 +23,7 @@ import PriceChart from "@/components/PriceChart";
 import RecommendationCard from "@/components/RecommendationCard";
 import PositionsTable from "@/components/PositionsTable";
 import TradeHistoryTable from "@/components/TradeHistoryTable";
+import PaymentSection from "@/components/PaymentSection";
 
 const POLL_MS = 6000;
 
@@ -68,6 +69,15 @@ function DashboardContent() {
   const [pendingBusyId, setPendingBusyId] = useState<number | null>(null);
 
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [chartExpanded, setChartExpanded] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setChartExpanded(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const refreshMarket = useCallback(async () => {
     const list = await api.symbols();
@@ -314,15 +324,39 @@ function DashboardContent() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          <div className="glass rounded-2xl p-4">
+          <div className={`glass rounded-2xl p-4 transition-all duration-300 ${chartExpanded ? "fixed inset-4 z-50 overflow-auto shadow-2xl" : ""}`}>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium text-muted">{selected} — Price Chart</p>
+            </div>
             {candles.length > 0 ? (
-              <PriceChart candles={candles} />
+              <PriceChart candles={candles} expanded={chartExpanded} />
             ) : (
               <div className="flex h-80 items-center justify-center text-muted">
                 Loading chart...
               </div>
             )}
+            {/* Expand button sits below the chart, never overlapping it */}
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={() => setChartExpanded((v) => !v)}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-foreground transition-colors"
+                title={chartExpanded ? "Collapse chart" : "Expand chart"}
+              >
+                {chartExpanded ? (
+                  <><Minimize2 size={13} /> Collapse</>
+                ) : (
+                  <><Maximize2 size={13} /> Expand</>
+                )}
+              </button>
+            </div>
           </div>
+          {/* Backdrop overlay when chart is expanded */}
+          {chartExpanded && (
+            <div
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              onClick={() => setChartExpanded(false)}
+            />
+          )}
 
           <div className="glass rounded-2xl">
             <div className="border-b border-border px-5 py-3 text-sm font-medium">
@@ -399,6 +433,11 @@ function DashboardContent() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Payment & Subscription ── */}
+      <div className="glass rounded-2xl p-6">
+        <PaymentSection />
       </div>
     </div>
   );
