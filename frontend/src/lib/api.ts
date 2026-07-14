@@ -267,8 +267,8 @@ export const api = {
       token,
     }),
 
-  news: (token: string, limit = 50) =>
-    request<NewsItem[]>(`/api/news?limit=${limit}`, { token }),
+  news: (limit = 50) =>
+    request<NewsItem[]>(`/api/news?limit=${limit}`),
 
   submitContact: (payload: { name: string; email: string; message: string }) =>
     request<{ status: string }>("/api/contact", {

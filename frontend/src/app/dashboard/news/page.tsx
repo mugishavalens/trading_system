@@ -31,11 +31,10 @@ export default function NewsPage() {
   const [filter, setFilter] = useState<Filter>("all");
 
   useEffect(() => {
-    if (!token) return;
     let cancelled = false;
 
     async function load() {
-      const data = await api.news(token!, 50);
+      const data = await api.news(50);
       if (!cancelled) setItems(data);
     }
 
@@ -45,7 +44,7 @@ export default function NewsPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token]);
+  }, []);
 
   const filtered = filter === "all" ? items : items.filter((i) => i.sentiment === filter);
 

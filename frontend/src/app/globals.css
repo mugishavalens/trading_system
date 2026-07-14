@@ -65,5 +65,21 @@ body {
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
+}
+
+[data-theme="light"] .glass {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+}
+
+[data-theme="light"] .border-white\/10 {
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="light"] .bg-white\/\[0\.03\],
+[data-theme="light"] .bg-white\/\[0\.02\],
+[data-theme="light"] .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
 }

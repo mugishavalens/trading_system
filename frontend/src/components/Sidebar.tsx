@@ -10,8 +10,6 @@ import {
   Wallet,
   History,
   ShieldAlert,
-  BookOpen,
-  Newspaper,
   Settings,
 } from "lucide-react";
 
@@ -22,8 +20,6 @@ const NAV = [
   { icon: Wallet, label: "Portfolio", href: "/dashboard/portfolio" },
   { icon: History, label: "History", href: "/dashboard/history" },
   { icon: ShieldAlert, label: "Risk", href: "/dashboard/risk" },
-  { icon: BookOpen, label: "Learn", href: "/dashboard/learn" },
-  { icon: Newspaper, label: "News", href: "/dashboard/news" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
