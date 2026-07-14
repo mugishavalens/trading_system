@@ -10,6 +10,8 @@ import Link from "next/link";
 import LandingNav from "@/components/LandingNav";
 import LandingFooter from "@/components/LandingFooter";
 import { LESSONS, CATEGORIES, videoSearchUrl, bookSearchUrl, type LessonCategory } from "@/lib/lessons";
+import { useAuth } from "@/lib/auth-context";
+import AuthGate from "@/components/AuthGate";
 
 const LEVEL_COLOR: Record<string, string> = {
   beginner: "bg-green-500/15 text-green-400",
@@ -20,10 +22,17 @@ const LEVEL_COLOR: Record<string, string> = {
 const LEVEL_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
 
 export default function LearnPage() {
+  const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState<LessonCategory | "All">("All");
   const [search, setSearch] = useState("");
   const [openLesson, setOpenLesson] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
+  const [showAuthGate, setShowAuthGate] = useState(false);
+
+  function openExternal(url: string) {
+    if (!user) { setShowAuthGate(true); return; }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 
   const filtered = LESSONS
     .filter((l) => activeCategory === "All" || l.category === activeCategory)
@@ -180,26 +189,22 @@ export default function LearnPage() {
                     {/* Resources */}
                     <div className="mt-4 flex flex-wrap gap-2">
                       {lesson.resources.videos.map((v) => (
-                        <a
+                        <button
                           key={v.title}
-                          href={videoSearchUrl(v)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          onClick={() => openExternal(videoSearchUrl(v))}
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
                         >
                           <Play size={10} className="fill-red-400" /> Watch Video
-                        </a>
+                        </button>
                       ))}
                       {lesson.resources.books.map((b) => (
-                        <a
+                        <button
                           key={b.title}
-                          href={bookSearchUrl(b)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          onClick={() => openExternal(bookSearchUrl(b))}
                           className="flex items-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/20 transition-colors"
                         >
                           <BookOpen size={10} /> {b.title.split(":")[0]}
-                        </a>
+                        </button>
                       ))}
                     </div>
 
@@ -268,6 +273,11 @@ export default function LearnPage() {
       </section>
 
       <LandingFooter />
+
+      {/* Auth gate */}
+      {showAuthGate && (
+        <AuthGate onClose={() => setShowAuthGate(false)} message="Sign in to access video and book resources." />
+      )}
     </div>
   );
 }

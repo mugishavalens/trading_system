@@ -9,6 +9,8 @@ import {
 import LandingNav from "@/components/LandingNav";
 import LandingFooter from "@/components/LandingFooter";
 import { api, NewsItem } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import AuthGate from "@/components/AuthGate";
 
 /* ─── Sentiment config ─────────────────────────────────────────────────────── */
 const SENTIMENT_CONFIG = {
@@ -41,12 +43,14 @@ const FALLBACK_NEWS: NewsItem[] = [
 ];
 
 export default function NewsPage() {
+  const { user } = useAuth();
   const [news, setNews] = useState<NewsItem[]>(FALLBACK_NEWS);
   const [loading, setLoading] = useState(false);
   const [symbol, setSymbol] = useState("All");
   const [sentiment, setSentiment] = useState("All");
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<NewsItem | null>(null);
+  const [showAuthGate, setShowAuthGate] = useState(false);
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true);
@@ -154,7 +158,7 @@ export default function NewsPage() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((item, i) => (
+      {filtered.map((item, i) => (
                 <NewsCard key={item.id} item={item} index={i} onOpen={() => setSelected(item)} />
               ))}
             </div>
@@ -166,8 +170,25 @@ export default function NewsPage() {
 
       {/* ── Detail modal ── */}
       <AnimatePresence>
-        {selected && <NewsModal item={selected} onClose={() => setSelected(null)} />}
+        {selected && (
+          <NewsModal
+            item={selected}
+            onClose={() => setSelected(null)}
+            onOpenExternal={(url) => {
+              if (!user) { setShowAuthGate(true); return; }
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
+          />
+        )}
       </AnimatePresence>
+
+      {/* ── Auth gate ── */}
+      {showAuthGate && (
+        <AuthGate
+          onClose={() => setShowAuthGate(false)}
+          message="Sign in to view real market coverage."
+        />
+      )}
     </div>
   );
 }
@@ -237,7 +258,11 @@ function NewsCard({ item, index, onOpen }: { item: NewsItem; index: number; onOp
 }
 
 /* ─── News Detail Modal ────────────────────────────────────────────────────── */
-function NewsModal({ item, onClose }: { item: NewsItem; onClose: () => void }) {
+function NewsModal({ item, onClose, onOpenExternal }: {
+  item: NewsItem;
+  onClose: () => void;
+  onOpenExternal: (url: string) => void;
+}) {
   const cfg = SENTIMENT_CONFIG[item.sentiment];
   const Icon = cfg.icon;
   const googleNewsUrl = `https://news.google.com/search?q=${encodeURIComponent(item.asset_name + " " + item.headline.split(" ").slice(0, 4).join(" "))}&hl=en`;
@@ -321,14 +346,16 @@ function NewsModal({ item, onClose }: { item: NewsItem; onClose: () => void }) {
             </p>
           </div>
 
-          {/* External link */}
-          <a href={googleNewsUrl} target="_blank" rel="noopener noreferrer"
-            className="mt-4 flex items-center justify-between rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm hover:border-accent/40 hover:bg-surface transition-all group">
+          {/* External link — opens new tab, auth-gated for guests */}
+          <button
+            onClick={() => onOpenExternal(googleNewsUrl)}
+            className="mt-4 flex w-full items-center justify-between rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm hover:border-accent/40 hover:bg-surface transition-all group"
+          >
             <span className="text-muted group-hover:text-foreground transition-colors">
               See real {item.asset_name} coverage on Google News
             </span>
             <ExternalLink size={14} className="text-accent shrink-0" />
-          </a>
+          </button>
         </div>
       </motion.div>
     </>

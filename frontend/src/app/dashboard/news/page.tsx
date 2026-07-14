@@ -32,18 +32,13 @@ export default function NewsPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
       const data = await api.news(50);
       if (!cancelled) setItems(data);
     }
-
     load();
     const id = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   const filtered = filter === "all" ? items : items.filter((i) => i.sentiment === filter);
@@ -53,24 +48,17 @@ export default function NewsPage() {
       <div>
         <h1 className="text-xl font-semibold">News</h1>
         <p className="mt-1 text-sm text-muted">
-          Synthetic news feed generated for this demo — headlines aren&apos;t
-          from a real news source, but the sentiment/impact scoring works the
-          same way a live News Intelligence module would.
+          Synthetic news feed generated for this demo — sentiment/impact scoring works the same as a live module would.
         </p>
       </div>
 
       <div className="mt-4 flex gap-2">
         {(["all", "positive", "negative", "neutral"] as Filter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
+          <button key={f} onClick={() => setFilter(f)}
             className={clsx(
               "rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
-              filter === f
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-border text-muted hover:text-foreground"
-            )}
-          >
+              filter === f ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"
+            )}>
             {f}
           </button>
         ))}
@@ -86,14 +74,11 @@ export default function NewsPage() {
                   <p className="text-xs text-accent">{item.symbol}</p>
                   <p className="mt-1 font-semibold">{item.headline}</p>
                 </div>
-                <span
-                  className={clsx(
-                    "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium capitalize",
-                    SENTIMENT_STYLES[item.sentiment]
-                  )}
-                >
-                  <Icon size={12} />
-                  {item.sentiment}
+                <span className={clsx(
+                  "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium capitalize",
+                  SENTIMENT_STYLES[item.sentiment]
+                )}>
+                  <Icon size={12} /> {item.sentiment}
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted">{item.summary}</p>
@@ -108,7 +93,7 @@ export default function NewsPage() {
                 className="mt-3 flex items-center gap-1.5 text-xs text-accent hover:underline"
               >
                 <ExternalLink size={12} />
-                See real {item.asset_name} coverage (opens in a new tab)
+                See real {item.asset_name} coverage
               </a>
             </div>
           );
