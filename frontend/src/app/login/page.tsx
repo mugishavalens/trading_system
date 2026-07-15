@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth-context";
@@ -27,33 +27,70 @@ function LoginContent() {
     setFace(searchParams.get("mode") === "register" ? "register" : "login");
   }, [searchParams]);
 
+  // Measure each face height so the container doesn't collapse
+  const frontRef = useRef<HTMLDivElement>(null);
+  const backRef  = useRef<HTMLDivElement>(null);
+  const [containerH, setContainerH] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const el = face === "login" ? frontRef.current : backRef.current;
+    if (el) setContainerH(el.offsetHeight);
+  }, [face]);
+
+  const flipped = face !== "login";
+
   return (
     <AuthSplit>
-      {/* Simple animated face switch — no preserve-3d/marginTop tricks */}
-      <div className="relative">
-        {face === "login" && (
-          <div key="login" className="animate-fade-in">
+      {/* 3-D flip container — height tracks the active face */}
+      <div
+        style={{
+          perspective: "1200px",
+          height: containerH ? `${containerH}px` : "auto",
+          transition: "height 0.4s ease",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            transformStyle: "preserve-3d",
+            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            transition: "transform 0.55s cubic-bezier(0.4,0.2,0.2,1)",
+          }}
+        >
+          {/* ── FRONT — login ── */}
+          <div
+            ref={frontRef}
+            style={{
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              position: flipped ? "absolute" : "relative",
+              inset: 0,
+              width: "100%",
+            }}
+          >
             <LoginForm
               onRegister={() => setFace("register")}
               onForgot={() => setFace("forgot")}
             />
           </div>
-        )}
-        {face === "register" && (
-          <div key="register" className="animate-fade-in">
-            <RegisterForm onFlip={() => setFace("login")} />
+
+          {/* ── BACK — register / forgot / reset ── */}
+          <div
+            ref={backRef}
+            style={{
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+              position: flipped ? "relative" : "absolute",
+              inset: 0,
+              width: "100%",
+            }}
+          >
+            {face === "register" && <RegisterForm onFlip={() => setFace("login")} />}
+            {face === "forgot"   && <ForgotPasswordForm onBack={() => setFace("login")} onHaveToken={() => setFace("reset")} />}
+            {face === "reset"    && <ResetPasswordForm onDone={() => setFace("login")} />}
           </div>
-        )}
-        {face === "forgot" && (
-          <div key="forgot" className="animate-fade-in">
-            <ForgotPasswordForm onBack={() => setFace("login")} onHaveToken={() => setFace("reset")} />
-          </div>
-        )}
-        {face === "reset" && (
-          <div key="reset" className="animate-fade-in">
-            <ResetPasswordForm onDone={() => setFace("login")} />
-          </div>
-        )}
+        </div>
       </div>
     </AuthSplit>
   );
