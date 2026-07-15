@@ -2,11 +2,12 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import AuthSplit from "@/components/AuthSplit";
+
+type Face = "login" | "register" | "forgot" | "reset";
 
 export default function LoginPage() {
   return (
@@ -18,57 +19,51 @@ export default function LoginPage() {
 
 function LoginContent() {
   const searchParams = useSearchParams();
-  const [flipped, setFlipped] = useState(searchParams.get("mode") === "register");
+  const [face, setFace] = useState<Face>(
+    searchParams.get("mode") === "register" ? "register" : "login"
+  );
 
   useEffect(() => {
-    setFlipped(searchParams.get("mode") === "register");
+    setFace(searchParams.get("mode") === "register" ? "register" : "login");
   }, [searchParams]);
-
-  const title = flipped ? "Create your account" : "Welcome back";
-  const subtitle = flipped
-    ? "Step 1 of 3 — $100,000 in virtual funds, zero risk."
-    : "Sign in to your demo trading account.";
 
   return (
     <AuthSplit>
-      {/* ── 3-D flip wrapper ── */}
-      {/*
-        Both faces are rendered in normal flow (not absolute) so the card
-        grows to fit whichever face is taller. The inactive face is hidden
-        with visibility:hidden so it still takes up space but isn't seen.
-        overflow:hidden clips the hidden face during the rotation.
-      */}
       <div style={{ perspective: "1000px", overflow: "hidden" }}>
         <div
           className="relative transition-transform duration-700"
           style={{
             transformStyle: "preserve-3d",
-            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            transform: face === "login" ? "rotateY(0deg)" : "rotateY(180deg)",
           }}
         >
-          {/* FRONT — login (always in flow) */}
+          {/* FRONT — login */}
           <div
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
-              visibility: flipped ? "hidden" : "visible",
+              visibility: face === "login" ? "visible" : "hidden",
             }}
           >
-            <LoginForm onFlip={() => setFlipped(true)} />
+            <LoginForm
+              onRegister={() => setFace("register")}
+              onForgot={() => setFace("forgot")}
+            />
           </div>
 
-          {/* BACK — register (rotated 180°, always in flow) */}
+          {/* BACK — register / forgot / reset (all share the rotated face) */}
           <div
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg)",
-              visibility: flipped ? "visible" : "hidden",
-              /* Pull it up so it overlaps the front face in the stack */
+              visibility: face !== "login" ? "visible" : "hidden",
               marginTop: "-100%",
             }}
           >
-            <RegisterForm onFlip={() => setFlipped(false)} />
+            {face === "register" && <RegisterForm onFlip={() => setFace("login")} />}
+            {face === "forgot"   && <ForgotPasswordForm onBack={() => setFace("login")} onHaveToken={() => setFace("reset")} />}
+            {face === "reset"    && <ResetPasswordForm onDone={() => setFace("login")} />}
           </div>
         </div>
       </div>
@@ -77,7 +72,7 @@ function LoginContent() {
 }
 
 // ── Login form ────────────────────────────────────────────────────────────────
-function LoginForm({ onFlip }: { onFlip: () => void }) {
+function LoginForm({ onRegister, onForgot }: { onRegister: () => void; onForgot: () => void }) {
   const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
@@ -117,7 +112,16 @@ function LoginForm({ onFlip }: { onFlip: () => void }) {
         />
       </div>
       <div>
-        <label className="text-sm text-muted">Password</label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-muted">Password</label>
+          <button
+            type="button"
+            onClick={onForgot}
+            className="text-xs text-accent hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
         <input
           type="password"
           required
@@ -143,12 +147,221 @@ function LoginForm({ onFlip }: { onFlip: () => void }) {
         Don&apos;t have an account?{" "}
         <button
           type="button"
-          onClick={onFlip}
+          onClick={onRegister}
           className="font-medium text-accent hover:underline"
         >
           Create one
         </button>
       </p>
+    </form>
+  );
+}
+
+// ── Forgot password form ──────────────────────────────────────────────────────
+function ForgotPasswordForm({
+  onBack,
+  onHaveToken,
+}: {
+  onBack: () => void;
+  onHaveToken: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await api.forgotPassword(email);
+      // token is empty string when email not found (we still show a neutral msg)
+      setToken(res.reset_token || null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function copyToken() {
+    if (!token) return;
+    navigator.clipboard.writeText(token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (token) {
+    return (
+      <div className="space-y-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Reset token ready</h1>
+          <p className="mt-1 text-sm text-muted">
+            Copy this token — you&apos;ll need it to set your new password. It expires in 1 hour.
+          </p>
+        </div>
+        <div className="rounded-lg border border-accent/30 bg-accent/10 p-4">
+          <p className="break-all font-mono text-xs text-accent">{token}</p>
+        </div>
+        <button
+          type="button"
+          onClick={copyToken}
+          className="w-full rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-surface transition-colors"
+        >
+          {copied ? "Copied!" : "Copy token"}
+        </button>
+        <button
+          type="button"
+          onClick={onHaveToken}
+          className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-black hover:bg-accent-2 transition-colors"
+        >
+          Use this token →
+        </button>
+        <button type="button" onClick={onBack} className="w-full text-center text-sm text-muted hover:text-foreground transition-colors">
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Forgot password?</h1>
+        <p className="mt-1 text-sm text-muted">
+          Enter your email and we&apos;ll generate a reset token for you.
+        </p>
+      </div>
+      <div>
+        <label className="text-sm text-muted">Email</label>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
+          placeholder="you@example.com"
+        />
+      </div>
+      {error && (
+        <p className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-black hover:bg-accent-2 disabled:opacity-60 transition-colors"
+      >
+        {submitting ? "Generating…" : "Get reset token"}
+      </button>
+      <button type="button" onClick={onBack} className="w-full text-center text-sm text-muted hover:text-foreground transition-colors">
+        Back to sign in
+      </button>
+    </form>
+  );
+}
+
+// ── Reset password form ───────────────────────────────────────────────────────
+function ResetPasswordForm({ onDone }: { onDone: () => void }) {
+  const [token, setToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword !== confirm) {
+      setError("Passwords don't match");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.resetPassword(token.trim(), newPassword);
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success text-2xl">✓</div>
+        <h1 className="text-2xl font-bold">Password updated</h1>
+        <p className="text-sm text-muted">You can now sign in with your new password.</p>
+        <button
+          type="button"
+          onClick={onDone}
+          className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-black hover:bg-accent-2 transition-colors"
+        >
+          Sign in
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Set new password</h1>
+        <p className="mt-1 text-sm text-muted">Paste your reset token and choose a new password.</p>
+      </div>
+      <div>
+        <label className="text-sm text-muted">Reset token</label>
+        <input
+          required
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-mono text-xs outline-none focus:border-accent transition-colors"
+          placeholder="Paste token here"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-muted">New password</label>
+        <input
+          type="password"
+          required
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
+          placeholder="At least 6 characters"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-muted">Confirm password</label>
+        <input
+          type="password"
+          required
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
+          placeholder="Repeat new password"
+        />
+      </div>
+      {error && (
+        <p className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-black hover:bg-accent-2 disabled:opacity-60 transition-colors"
+      >
+        {submitting ? "Updating…" : "Update password"}
+      </button>
     </form>
   );
 }

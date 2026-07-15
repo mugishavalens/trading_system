@@ -92,6 +92,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  forgotPassword: (email: string) =>
+    request<{ reset_token: string; message: string }>("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, new_password: string) =>
+    request<{ status: string }>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    }),
+
   symbols: () => request<SymbolInfo[]>("/api/market/symbols"),
 
   candles: (symbol: string, limit = 120) =>

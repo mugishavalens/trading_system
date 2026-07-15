@@ -1,3 +1,6 @@
+import secrets
+import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -5,9 +8,12 @@ from ..database import get_db
 from ..models import TradingMode, User, UserRole
 from ..schemas import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     ProfileUpdateRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserResponse,
 )
@@ -99,3 +105,46 @@ def change_password(
     current_user.hashed_password = hash_password(payload.new_password)
     db.commit()
     return {"status": "updated"}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    # Always return 200 — never reveal whether an email is registered.
+    if not user:
+        return ForgotPasswordResponse(
+            reset_token="",
+            message="If that email is registered you will receive a reset token.",
+        )
+
+    token = secrets.token_hex(32)  # 64-char hex string
+    user.password_reset_token = token
+    user.password_reset_expires = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    db.commit()
+
+    # In production you would email `token` to the user here.
+    # For this demo we return it in the response body so the flow is usable
+    # without a mail server — the frontend will display it to the user.
+    return ForgotPasswordResponse(
+        reset_token=token,
+        message="Reset token generated. Copy it and use it to set a new password.",
+    )
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = (
+        db.query(User)
+        .filter(User.password_reset_token == payload.token)
+        .first()
+    )
+    if not user or user.password_reset_expires is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    if datetime.datetime.utcnow() > user.password_reset_expires:
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+
+    user.hashed_password = hash_password(payload.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    db.commit()
+    return {"status": "password updated"}

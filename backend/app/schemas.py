@@ -53,6 +53,22 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=6)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    # In a real app this would be sent by email. For this demo we return the
+    # token directly so the flow is testable without a mail server.
+    reset_token: str
+    message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6)
+
+
 # ---- Market data ----
 
 class Candle(BaseModel):
