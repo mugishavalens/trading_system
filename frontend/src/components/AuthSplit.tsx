@@ -120,11 +120,11 @@ export default function AuthSplit({
       </div>
 
       {/* Right panel — auth form */}
-      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16 bg-background relative">
+      <div className="flex w-full flex-col justify-start px-6 py-12 lg:w-1/2 lg:px-16 bg-background relative overflow-y-auto">
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10"
           style={{ background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(245,158,11,0.05) 0%, transparent 60%)" }} />
 
-        <div className="mx-auto w-full max-w-sm">
+        <div className="mx-auto w-full max-w-sm lg:mt-16">
           {/* Mobile logo */}
           <Link href="/" className="mb-8 flex items-center gap-2 lg:hidden">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-accent">
