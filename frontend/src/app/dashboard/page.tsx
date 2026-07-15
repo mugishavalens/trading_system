@@ -215,12 +215,12 @@ function DashboardContent() {
     }
   }
 
-  async function handleManualTrade(side: "BUY" | "SELL", quantity: number) {
+  async function handleManualTrade(side: "BUY" | "SELL", quantity: number, stopLoss?: number, takeProfit?: number, deviation?: number) {
     if (!token || !quantity || quantity <= 0) return;
     setExecuting(true);
     setTradeError(null);
     try {
-      await api.executeTrade(token, { symbol: selected, side, quantity });
+      await api.executeTrade(token, { symbol: selected, side, quantity, stop_loss: stopLoss, take_profit: takeProfit, deviation });
       await Promise.all([refreshAccount(), refreshUser()]);
     } catch (err) {
       setTradeError(err instanceof ApiError ? err.message : "Trade failed.");

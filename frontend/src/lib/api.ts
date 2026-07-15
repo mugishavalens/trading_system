@@ -119,7 +119,7 @@ export const api = {
 
   executeTrade: (
     token: string,
-    payload: { symbol: string; side: "BUY" | "SELL"; quantity: number }
+    payload: { symbol: string; side: "BUY" | "SELL"; quantity: number; stop_loss?: number; take_profit?: number; deviation?: number }
   ) =>
     request<Trade>("/api/trading/execute", {
       method: "POST",

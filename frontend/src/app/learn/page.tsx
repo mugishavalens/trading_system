@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Play, CheckCircle2, XCircle, ChevronRight,
-  Clock, BarChart2, Award, Search, Filter,
+  Clock, BarChart2, Award, Search, Filter, Lock,
 } from "lucide-react";
 import Link from "next/link";
 import LandingNav from "@/components/LandingNav";
@@ -45,6 +45,19 @@ export default function LearnPage() {
       return lesson && ans === lesson.quiz.correctIndex;
     }
   ).length;
+
+  // Build a set of unlocked lesson IDs — each lesson unlocks the next
+  const LESSON_ORDER = LESSONS.map((l) => l.id);
+  const unlockedIds = new Set<string>();
+  unlockedIds.add(LESSON_ORDER[0]); // first lesson always unlocked
+  for (let i = 0; i < LESSON_ORDER.length - 1; i++) {
+    const id  = LESSON_ORDER[i];
+    const ans = answers[id];
+    const lesson = LESSONS.find((l) => l.id === id);
+    if (lesson && ans === lesson.quiz.correctIndex) {
+      unlockedIds.add(LESSON_ORDER[i + 1]);
+    }
+  }
 
   return (
     <div className="flex-1">
@@ -147,9 +160,10 @@ export default function LearnPage() {
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((lesson, i) => {
-              const answered = answers[lesson.id] !== undefined && answers[lesson.id] !== null;
-              const correct = answered && answers[lesson.id] === lesson.quiz.correctIndex;
-              const isOpen = openLesson === lesson.id;
+              const answered  = answers[lesson.id] !== undefined && answers[lesson.id] !== null;
+              const correct   = answered && answers[lesson.id] === lesson.quiz.correctIndex;
+              const isOpen    = openLesson === lesson.id;
+              const isLocked  = !unlockedIds.has(lesson.id);
 
               return (
                 <motion.div
@@ -157,12 +171,22 @@ export default function LearnPage() {
                   initial={{ opacity: 0, y: 24 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
-                    isOpen
+                  className={`relative rounded-3xl border transition-all duration-300 overflow-hidden ${
+                    isLocked
+                      ? "border-border opacity-60 grayscale"
+                      : isOpen
                       ? "border-accent/40 shadow-xl shadow-accent/10"
                       : "border-white/10 hover:border-white/20"
                   } bg-white/[0.03] backdrop-blur-sm`}
                 >
+                  {/* Lock overlay */}
+                  {isLocked && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-background/70 backdrop-blur-[2px]">
+                      <Lock size={24} className="text-muted mb-2" />
+                      <p className="text-xs text-muted font-medium">Complete the previous lesson first</p>
+                    </div>
+                  )}
+
                   {/* Card header */}
                   <div className="p-6">
                     <div className="flex items-start justify-between gap-3">
@@ -209,8 +233,9 @@ export default function LearnPage() {
                     </div>
 
                     <button
-                      onClick={() => setOpenLesson(isOpen ? null : lesson.id)}
-                      className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-all ${
+                      onClick={() => !isLocked && setOpenLesson(isOpen ? null : lesson.id)}
+                      disabled={isLocked}
+                      className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                         isOpen
                           ? "bg-accent/20 text-accent"
                           : "bg-white/5 text-muted hover:bg-white/10 hover:text-foreground"

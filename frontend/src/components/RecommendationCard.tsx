@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import clsx from "clsx";
-import { Sparkles, Loader2, ChevronDown, ShieldAlert, Newspaper, Bot } from "lucide-react";
+import { Sparkles, Loader2, ChevronDown, ShieldAlert, Newspaper, Bot, Wand2 } from "lucide-react";
 import { AIRecommendation, DebateResult } from "@/lib/api";
 
 const ACTION_STYLES: Record<string, string> = {
@@ -44,10 +44,32 @@ export default function RecommendationCard({
   executing: boolean;
   onExecuteAi: () => void;
   tradeError: string | null;
-  onManualTrade: (side: "BUY" | "SELL", quantity: number) => void;
+  onManualTrade: (side: "BUY" | "SELL", quantity: number, stopLoss?: number, takeProfit?: number, deviation?: number) => void;
 }) {
-  const [manualQty, setManualQty] = useState("0.01");
+  const [manualQty,  setManualQty]  = useState("0.01");
+  const [stopLoss,   setStopLoss]   = useState("");
+  const [takeProfit, setTakeProfit] = useState("");
+  const [deviation,  setDeviation]  = useState("");
   const [debateOpen, setDebateOpen] = useState(false);
+
+  // Auto-fill AI-suggested SL/TP whenever recommendation changes
+  useEffect(() => {
+    if (!rec.indicators?.atr || rec.action === "HOLD") return;
+    const atr   = rec.indicators.atr;
+    const price = rec.price;
+    const sl = rec.action === "BUY"  ? price - 1.5 * atr : price + 1.5 * atr;
+    const tp = rec.action === "BUY"  ? price + 2.5 * atr : price - 2.5 * atr;
+    setStopLoss(sl.toFixed(5));
+    setTakeProfit(tp.toFixed(5));
+  }, [rec.symbol, rec.action, rec.price, rec.indicators?.atr]);
+
+  function applyAiLevels() {
+    if (!rec.indicators?.atr || rec.action === "HOLD") return;
+    const atr   = rec.indicators.atr;
+    const price = rec.price;
+    setStopLoss((rec.action === "BUY" ? price - 1.5 * atr : price + 1.5 * atr).toFixed(5));
+    setTakeProfit((rec.action === "BUY" ? price + 2.5 * atr : price - 2.5 * atr).toFixed(5));
+  }
 
   return (
     <div className="glass rounded-2xl p-6">
@@ -200,28 +222,85 @@ export default function RecommendationCard({
       </div>
 
       <div className="mt-5 border-t border-border pt-4">
-        <p className="text-xs text-muted">Or trade manually</p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            type="number"
-            min="0"
-            step="0.001"
-            value={manualQty}
-            onChange={(e) => setManualQty(e.target.value)}
-            className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <button
-            onClick={() => onManualTrade("BUY", parseFloat(manualQty))}
-            className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-success hover:bg-success/20 transition-colors"
-          >
-            Buy
-          </button>
-          <button
-            onClick={() => onManualTrade("SELL", parseFloat(manualQty))}
-            className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/20 transition-colors"
-          >
-            Sell
-          </button>
+        <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Manual Trade</p>
+        <div className="space-y-3">
+          {/* Qty + side */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-muted">Quantity (lots)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.001"
+                value={manualQty}
+                onChange={(e) => setManualQty(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                placeholder="0.01"
+              />
+            </div>
+          </div>
+
+          {/* SL / TP / Deviation */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted">Stop Loss</label>
+                {rec.action !== "HOLD" && (
+                  <button onClick={applyAiLevels} title="Apply AI suggestion" className="text-accent hover:text-accent-2">
+                    <Wand2 size={10} />
+                  </button>
+                )}
+              </div>
+              <input
+                type="number" min="0" step="0.0001" value={stopLoss}
+                onChange={(e) => setStopLoss(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-2 text-xs outline-none focus:border-danger placeholder:text-muted"
+                placeholder="not set"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted">Take Profit</label>
+              <input
+                type="number" min="0" step="0.0001" value={takeProfit}
+                onChange={(e) => setTakeProfit(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-2 text-xs outline-none focus:border-success placeholder:text-muted"
+                placeholder="not set"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted">Deviation</label>
+              <input
+                type="number" min="0" step="1" value={deviation}
+                onChange={(e) => setDeviation(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-2 text-xs outline-none focus:border-accent placeholder:text-muted"
+                placeholder="pips"
+              />
+            </div>
+          </div>
+
+          {/* Price preview */}
+          <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
+            <span>Current price</span>
+            <span className="font-semibold text-foreground">
+              ${rec.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+            </span>
+          </div>
+
+          {/* Sell / Buy */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onManualTrade("SELL", parseFloat(manualQty), parseFloat(stopLoss) || undefined, parseFloat(takeProfit) || undefined, parseFloat(deviation) || undefined)}
+              className="rounded-xl border border-danger/30 bg-danger/10 py-3 text-sm font-bold text-danger hover:bg-danger/20 transition-colors"
+            >
+              Sell
+            </button>
+            <button
+              onClick={() => onManualTrade("BUY", parseFloat(manualQty), parseFloat(stopLoss) || undefined, parseFloat(takeProfit) || undefined, parseFloat(deviation) || undefined)}
+              className="rounded-xl border border-success/30 bg-success/10 py-3 text-sm font-bold text-success hover:bg-success/20 transition-colors"
+            >
+              Buy
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -259,7 +259,7 @@ function Stats() {
 // ── Features ──────────────────────────────────────────────────────────────────
 function Features() {
   return (
-    <section id="features" className="px-6 py-24">
+    <section id="features" className="scroll-mt-20 px-6 py-24">
       <div className="mx-auto max-w-7xl">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center">
           <span className="inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs font-medium text-accent">Platform Features</span>
@@ -290,7 +290,7 @@ function Features() {
 // ── AI Personas ───────────────────────────────────────────────────────────────
 function AIPersonas() {
   return (
-    <section id="ai-agents" className="px-6 py-24 relative overflow-hidden">
+    <section id="ai-agents" className="scroll-mt-20 px-6 py-24 relative overflow-hidden">
       {/* Background image with overlay */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0"
@@ -333,7 +333,7 @@ function AIPersonas() {
 // ── AI Debate ─────────────────────────────────────────────────────────────────
 function AIDebate() {
   return (
-    <section id="ai-debate" className="px-6 py-24">
+    <section id="ai-debate" className="scroll-mt-20 px-6 py-24">
       <div className="mx-auto max-w-5xl">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center">
           <span className="inline-block rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-1.5 text-xs font-medium text-purple-400">Unique Feature</span>
@@ -400,7 +400,7 @@ function AIDebate() {
 // ── How It Works ──────────────────────────────────────────────────────────────
 function HowItWorks() {
   return (
-    <section id="how-it-works" className="px-6 py-24 relative overflow-hidden">
+    <section id="how-it-works" className="scroll-mt-20 px-6 py-24 relative overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-30"
         style={{ background: "radial-gradient(ellipse 80% 50% at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 70%)" }} />
       <div className="mx-auto max-w-5xl">
@@ -430,7 +430,7 @@ function HowItWorks() {
 // ── Dashboard Preview ─────────────────────────────────────────────────────────
 function DashboardPreview() {
   return (
-    <section id="dashboard-preview" className="px-6 py-24">
+    <section id="dashboard-preview" className="scroll-mt-20 px-6 py-24">
       <div className="mx-auto max-w-5xl">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
           className="rounded-3xl border border-border bg-surface p-8 shadow-2xl">
