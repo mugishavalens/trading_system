@@ -29,43 +29,31 @@ function LoginContent() {
 
   return (
     <AuthSplit>
-      <div style={{ perspective: "1000px" }}>
-        <div
-          className="relative transition-transform duration-700"
-          style={{
-            transformStyle: "preserve-3d",
-            transform: face === "login" ? "rotateY(0deg)" : "rotateY(180deg)",
-          }}
-        >
-          {/* FRONT — login */}
-          <div
-            style={{
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
-              visibility: face === "login" ? "visible" : "hidden",
-            }}
-          >
+      {/* Simple animated face switch — no preserve-3d/marginTop tricks */}
+      <div className="relative">
+        {face === "login" && (
+          <div key="login" className="animate-fade-in">
             <LoginForm
               onRegister={() => setFace("register")}
               onForgot={() => setFace("forgot")}
             />
           </div>
-
-          {/* BACK — register / forgot / reset (all share the rotated face) */}
-          <div
-            style={{
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
-              transform: "rotateY(180deg)",
-              visibility: face !== "login" ? "visible" : "hidden",
-              marginTop: "-100%",
-            }}
-          >
-            {face === "register" && <RegisterForm onFlip={() => setFace("login")} />}
-            {face === "forgot"   && <ForgotPasswordForm onBack={() => setFace("login")} onHaveToken={() => setFace("reset")} />}
-            {face === "reset"    && <ResetPasswordForm onDone={() => setFace("login")} />}
+        )}
+        {face === "register" && (
+          <div key="register" className="animate-fade-in">
+            <RegisterForm onFlip={() => setFace("login")} />
           </div>
-        </div>
+        )}
+        {face === "forgot" && (
+          <div key="forgot" className="animate-fade-in">
+            <ForgotPasswordForm onBack={() => setFace("login")} onHaveToken={() => setFace("reset")} />
+          </div>
+        )}
+        {face === "reset" && (
+          <div key="reset" className="animate-fade-in">
+            <ResetPasswordForm onDone={() => setFace("login")} />
+          </div>
+        )}
       </div>
     </AuthSplit>
   );
