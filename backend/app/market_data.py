@@ -10,15 +10,43 @@ import random
 import threading
 
 SYMBOLS = {
-    "BTC/USD": {"name": "Bitcoin", "asset_class": "crypto", "base_price": 61_000, "vol": 0.018},
-    "ETH/USD": {"name": "Ethereum", "asset_class": "crypto", "base_price": 3_400, "vol": 0.022},
-    "SOL/USD": {"name": "Solana", "asset_class": "crypto", "base_price": 145, "vol": 0.03},
-    "AAPL": {"name": "Apple Inc.", "asset_class": "stock", "base_price": 210, "vol": 0.011},
-    "TSLA": {"name": "Tesla Inc.", "asset_class": "stock", "base_price": 250, "vol": 0.025},
-    "EUR/USD": {"name": "Euro / US Dollar", "asset_class": "forex", "base_price": 1.0850, "vol": 0.004},
-    "GBP/USD": {"name": "British Pound / US Dollar", "asset_class": "forex", "base_price": 1.2650, "vol": 0.005},
-    "USD/JPY": {"name": "US Dollar / Japanese Yen", "asset_class": "forex", "base_price": 155.30, "vol": 0.004},
-    "AUD/USD": {"name": "Australian Dollar / US Dollar", "asset_class": "forex", "base_price": 0.6550, "vol": 0.005},
+    # ── Crypto ──────────────────────────────────────────────────────────────
+    "BTC/USD":  {"name": "Bitcoin",           "asset_class": "crypto",    "base_price": 61_000,  "vol": 0.018},
+    "ETH/USD":  {"name": "Ethereum",          "asset_class": "crypto",    "base_price": 3_400,   "vol": 0.022},
+    "SOL/USD":  {"name": "Solana",            "asset_class": "crypto",    "base_price": 145,     "vol": 0.030},
+    "XRP/USD":  {"name": "XRP",               "asset_class": "crypto",    "base_price": 0.52,    "vol": 0.028},
+    "BNB/USD":  {"name": "BNB",               "asset_class": "crypto",    "base_price": 400,     "vol": 0.020},
+    "ADA/USD":  {"name": "Cardano",           "asset_class": "crypto",    "base_price": 0.45,    "vol": 0.032},
+
+    # ── Forex ────────────────────────────────────────────────────────────────
+    "EUR/USD":  {"name": "Euro / US Dollar",              "asset_class": "forex", "base_price": 1.0850,  "vol": 0.004},
+    "GBP/USD":  {"name": "British Pound / US Dollar",     "asset_class": "forex", "base_price": 1.2650,  "vol": 0.005},
+    "USD/JPY":  {"name": "US Dollar / Japanese Yen",      "asset_class": "forex", "base_price": 155.30,  "vol": 0.004},
+    "AUD/USD":  {"name": "Australian Dollar / US Dollar", "asset_class": "forex", "base_price": 0.6550,  "vol": 0.005},
+    "USD/CAD":  {"name": "US Dollar / Canadian Dollar",   "asset_class": "forex", "base_price": 1.3650,  "vol": 0.004},
+    "NZD/USD":  {"name": "New Zealand Dollar / US Dollar","asset_class": "forex", "base_price": 0.6050,  "vol": 0.005},
+    "USD/CHF":  {"name": "US Dollar / Swiss Franc",       "asset_class": "forex", "base_price": 0.9020,  "vol": 0.004},
+
+    # ── Stocks ───────────────────────────────────────────────────────────────
+    "AAPL":     {"name": "Apple Inc.",        "asset_class": "stock",     "base_price": 210,     "vol": 0.011},
+    "TSLA":     {"name": "Tesla Inc.",        "asset_class": "stock",     "base_price": 250,     "vol": 0.025},
+    "GOOGL":    {"name": "Alphabet Inc.",     "asset_class": "stock",     "base_price": 175,     "vol": 0.013},
+    "MSFT":     {"name": "Microsoft Corp.",   "asset_class": "stock",     "base_price": 420,     "vol": 0.012},
+    "AMZN":     {"name": "Amazon.com Inc.",   "asset_class": "stock",     "base_price": 195,     "vol": 0.014},
+    "NVDA":     {"name": "NVIDIA Corp.",      "asset_class": "stock",     "base_price": 870,     "vol": 0.022},
+    "META":     {"name": "Meta Platforms",    "asset_class": "stock",     "base_price": 510,     "vol": 0.016},
+
+    # ── Commodities ──────────────────────────────────────────────────────────
+    "GOLD":     {"name": "Gold Spot",         "asset_class": "commodity", "base_price": 2_320,   "vol": 0.008},
+    "SILVER":   {"name": "Silver Spot",       "asset_class": "commodity", "base_price": 27.50,   "vol": 0.012},
+    "USOIL":    {"name": "US Crude Oil WTI",  "asset_class": "commodity", "base_price": 79.50,   "vol": 0.015},
+    "NATGAS":   {"name": "Natural Gas",       "asset_class": "commodity", "base_price": 2.30,    "vol": 0.025},
+
+    # ── Indices ──────────────────────────────────────────────────────────────
+    "SPX500":   {"name": "S&P 500 Index",     "asset_class": "index",     "base_price": 5_300,   "vol": 0.008},
+    "NAS100":   {"name": "Nasdaq 100",        "asset_class": "index",     "base_price": 18_500,  "vol": 0.010},
+    "DJI30":    {"name": "Dow Jones 30",      "asset_class": "index",     "base_price": 39_500,  "vol": 0.007},
+    "DAX40":    {"name": "DAX 40 (Germany)",  "asset_class": "index",     "base_price": 18_200,  "vol": 0.009},
 }
 
 HISTORY_LENGTH = 180

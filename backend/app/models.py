@@ -65,6 +65,8 @@ class User(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
+    password_reset_token: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    password_reset_expires: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 
     positions: Mapped[list["Position"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

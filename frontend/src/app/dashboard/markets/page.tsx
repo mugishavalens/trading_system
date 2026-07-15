@@ -14,9 +14,11 @@ import { useTheme } from "@/lib/theme-context";
 
 /* ─── Asset class groups ────────────────────────────────────────────────── */
 const GROUPS = [
-  { key: "crypto", label: "CRYPTO",   emoji: "₿" },
-  { key: "forex",  label: "FOREX",    emoji: "💱" },
-  { key: "stock",  label: "STOCKS",   emoji: "📈" },
+  { key: "crypto",    label: "CRYPTO",      emoji: "₿"  },
+  { key: "forex",     label: "FOREX",       emoji: "💱" },
+  { key: "stock",     label: "STOCKS",      emoji: "📈" },
+  { key: "commodity", label: "COMMODITIES", emoji: "🥇" },
+  { key: "index",     label: "INDICES",     emoji: "📊" },
 ];
 
 const SENTIMENT: Record<string, { icon: typeof TrendingUp; cls: string }> = {
