@@ -10,7 +10,6 @@ import {
   IChartApi,
   ISeriesApi,
   LineStyle,
-  MouseEventParams,
 } from "lightweight-charts";
 import { Candle } from "@/lib/api";
 import { chartColors } from "@/lib/chartTheme";
@@ -79,20 +78,23 @@ export default function PriceChart({
   candles: Candle[];
   expanded?: boolean;
 }) {
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const chartRef      = useRef<IChartApi | null>(null);
+  const containerRef    = useRef<HTMLDivElement>(null);
+  const chartRef        = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const drawnLinesRef = useRef<DrawnLine[]>([]);
+  const drawnLinesRef   = useRef<DrawnLine[]>([]);
   const trendlineFirstRef = useRef<{ time: UTCTimestamp; price: number } | null>(null);
+  const displayCandlesRef = useRef<Candle[]>([]); // stable ref so click handler always has latest
 
   const { theme }     = useTheme();
   const [timeframe,   setTimeframe]   = useState<Timeframe>("M1");
   const [drawTool,    setDrawTool]    = useState<DrawTool>("none");
-  const [lineCount,   setLineCount]   = useState(0); // trigger re-render for delete btn
+  const [lineCount,        setLineCount]        = useState(0);
+  const [trendlineStarted, setTrendlineStarted] = useState(false);
 
   /* ── derived candles ── */
   const tf = TIMEFRAMES.find((t) => t.key === timeframe)!;
   const displayCandles = aggregateCandles(candles, tf.minutes);
+  displayCandlesRef.current = displayCandles; // always in sync
 
   /* ── build / rebuild chart ── */
   useEffect(() => {
@@ -199,54 +201,64 @@ export default function PriceChart({
 
   /* ── Chart click handler for drawing ── */
   useEffect(() => {
-    if (!chartRef.current || !candleSeriesRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     if (drawTool === "none") return;
 
-    const chart  = chartRef.current;
     const colors = chartColors(theme);
 
-    function onChartClick(param: MouseEventParams) {
-      if (!param.point || !param.time) return;
-      const price = candleSeriesRef.current!.coordinateToPrice(param.point.y);
+    function onContainerClick(e: MouseEvent) {
+      const chart = chartRef.current;
+      const series = candleSeriesRef.current;
+      if (!chart || !series || !container) return;
+
+      // Convert DOM pixel coords to chart price/time
+      const rect  = container.getBoundingClientRect();
+      const x     = e.clientX - rect.left;
+      const y     = e.clientY - rect.top;
+
+      const price = series.coordinateToPrice(y);
       if (price === null) return;
-      const clickTime = param.time as UTCTimestamp;
+
+      // Convert x pixel to time via the time scale
+      const time = chart.timeScale().coordinateToTime(x) as UTCTimestamp | null;
+      if (!time) return;
+
+      const dc = displayCandlesRef.current;
 
       if (drawTool === "hline") {
         const lineSeries = chart.addSeries(LineSeries, {
           color:     colors.accent,
-          lineWidth: 1,
+          lineWidth: 2,
           lineStyle: LineStyle.Dashed,
           priceLineVisible: false,
           lastValueVisible: true,
           crosshairMarkerVisible: false,
           title: "S/R",
         });
-        const pts = displayCandles.map((c) => ({
-          time:  (new Date(c.time).getTime() / 1000) as UTCTimestamp,
-          value: price,
-        }));
-        lineSeries.setData(pts);
-        drawnLinesRef.current.push({
-          id: crypto.randomUUID(),
-          type: "hline",
-          price,
-          series: lineSeries,
-        });
+        lineSeries.setData(
+          dc.map((c) => ({
+            time:  (new Date(c.time).getTime() / 1000) as UTCTimestamp,
+            value: price,
+          }))
+        );
+        drawnLinesRef.current.push({ id: crypto.randomUUID(), type: "hline", price, series: lineSeries });
         setLineCount((n) => n + 1);
 
       } else if (drawTool === "trendline") {
         if (!trendlineFirstRef.current) {
-          trendlineFirstRef.current = { time: clickTime, price };
+          trendlineFirstRef.current = { time, price };
+          setTrendlineStarted(true);
         } else {
           const p1 = trendlineFirstRef.current;
-          const p2 = { time: clickTime, price };
+          const p2 = { time, price };
           const lineSeries = chart.addSeries(LineSeries, {
-            color:     colors.success,
-            lineWidth: 1,
+            color:     "#22c55e",
+            lineWidth: 2,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: false,
-            crosshairMarkerVisible: false,
+            crosshairMarkerVisible: true,
             title: "Trend",
           });
           const [a, b] = p1.time < p2.time ? [p1, p2] : [p2, p1];
@@ -254,22 +266,18 @@ export default function PriceChart({
             { time: a.time, value: a.price },
             { time: b.time, value: b.price },
           ]);
-          drawnLinesRef.current.push({
-            id: crypto.randomUUID(),
-            type: "trendline",
-            p1: a, p2: b,
-            series: lineSeries,
-          });
+          drawnLinesRef.current.push({ id: crypto.randomUUID(), type: "trendline", p1: a, p2: b, series: lineSeries });
           trendlineFirstRef.current = null;
+          setTrendlineStarted(false);
           setLineCount((n) => n + 1);
         }
       }
     }
 
-    chart.subscribeClick(onChartClick);
-    return () => { chart.unsubscribeClick(onChartClick); };
+    container.addEventListener("click", onContainerClick);
+    return () => container.removeEventListener("click", onContainerClick);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawTool, theme, displayCandles]);
+  }, [drawTool, theme, timeframe, expanded]);
 
   /* ── Clear all drawn objects ── */
   const clearLines = useCallback(() => {
@@ -294,7 +302,7 @@ export default function PriceChart({
           {TIMEFRAMES.map((t) => (
             <button
               key={t.key}
-              onClick={() => { setTimeframe(t.key); setDrawTool("none"); }}
+              onClick={() => { setTimeframe(t.key); setDrawTool("none"); setTrendlineStarted(false); }}
               className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
                 timeframe === t.key
                   ? "bg-accent text-black shadow-sm"
@@ -312,7 +320,7 @@ export default function PriceChart({
         {/* Drawing tools */}
         <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1">
           <button
-            onClick={() => setDrawTool("none")}
+            onClick={() => { setDrawTool("none"); setTrendlineStarted(false); trendlineFirstRef.current = null; }}
             title="Select / Pan"
             className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
               drawTool === "none"
@@ -368,7 +376,7 @@ export default function PriceChart({
           <span className="text-xs text-accent animate-pulse">
             {drawTool === "hline"
               ? "Click chart to place horizontal line"
-              : trendlineFirstRef.current
+              : trendlineStarted
               ? "Click second point to complete trendline"
               : "Click first point of trendline"}
           </span>

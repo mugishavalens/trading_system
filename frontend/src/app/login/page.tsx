@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth-context";
@@ -27,45 +27,38 @@ function LoginContent() {
     setFace(searchParams.get("mode") === "register" ? "register" : "login");
   }, [searchParams]);
 
-  // Measure each face height so the container doesn't collapse
-  const frontRef = useRef<HTMLDivElement>(null);
-  const backRef  = useRef<HTMLDivElement>(null);
-  const [containerH, setContainerH] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    const el = face === "login" ? frontRef.current : backRef.current;
-    if (el) setContainerH(el.offsetHeight);
-  }, [face]);
-
   const flipped = face !== "login";
 
   return (
     <AuthSplit>
-      {/* 3-D flip container — height tracks the active face */}
-      <div
-        style={{
-          perspective: "1200px",
-          height: containerH ? `${containerH}px` : "auto",
-          transition: "height 0.4s ease",
-        }}
-      >
+      {/* 
+        The flip uses rotateY. Both faces always rendered.
+        Front = login (drives card height via normal flow).
+        Back  = register/forgot/reset (absolutely positioned, same width).
+        The outer card in AuthSplit has overflow:visible so back face
+        can extend below if taller — the card visually grows on the back.
+      */}
+      <div style={{ perspective: "1200px" }}>
         <div
           style={{
-            position: "relative",
             transformStyle: "preserve-3d",
             transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
             transition: "transform 0.55s cubic-bezier(0.4,0.2,0.2,1)",
+            position: "relative",
+            /* 
+              minHeight = whichever face is taller. We give the container
+              enough height for the register form (tallest face) always,
+              but hide the overflow on login side via backface-visibility.
+            */
           }}
         >
-          {/* ── FRONT — login ── */}
+          {/* FRONT — login */}
           <div
-            ref={frontRef}
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
-              position: flipped ? "absolute" : "relative",
-              inset: 0,
-              width: "100%",
+              // When flipped, move front face out of flow so only back face drives height
+              ...(flipped ? { position: "absolute" as const, top: 0, left: 0, right: 0 } : {}),
             }}
           >
             <LoginForm
@@ -74,16 +67,16 @@ function LoginContent() {
             />
           </div>
 
-          {/* ── BACK — register / forgot / reset ── */}
+          {/* BACK — rotated 180° */}
           <div
-            ref={backRef}
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg)",
-              position: flipped ? "relative" : "absolute",
-              inset: 0,
-              width: "100%",
+              // When NOT flipped, keep it absolute (hidden). When flipped, in normal flow.
+              ...(flipped
+                ? {}
+                : { position: "absolute" as const, top: 0, left: 0, right: 0 }),
             }}
           >
             {face === "register" && <RegisterForm onFlip={() => setFace("login")} />}
