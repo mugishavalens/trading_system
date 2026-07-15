@@ -29,7 +29,7 @@ function LoginContent() {
 
   return (
     <AuthSplit>
-      <div style={{ perspective: "1000px", overflow: "hidden" }}>
+      <div style={{ perspective: "1000px" }}>
         <div
           className="relative transition-transform duration-700"
           style={{

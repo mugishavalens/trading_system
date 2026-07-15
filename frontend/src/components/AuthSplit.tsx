@@ -120,7 +120,7 @@ export default function AuthSplit({
       </div>
 
       {/* Right panel — auth form */}
-      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16 bg-background relative overflow-hidden">
+      <div className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16 bg-background relative">
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10"
           style={{ background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(245,158,11,0.05) 0%, transparent 60%)" }} />
 
@@ -133,12 +133,13 @@ export default function AuthSplit({
             <span className="font-bold">AI Trading <span className="text-accent">Mentor</span></span>
           </Link>
 
-          {/* Card — title + children (flip card lives here) */}
+          {/* Card — flip card lives here, no overflow clipping */}
           <div className="rounded-3xl p-8"
             style={{
               background: "var(--surface)",
               boxShadow: "var(--neumorph-shadow)",
               border: "1px solid var(--glass-border)",
+              overflow: "visible",
             }}>
             {title && <h1 className="text-2xl font-bold">{title}</h1>}
             {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
