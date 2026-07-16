@@ -6,11 +6,48 @@ import { motion } from "framer-motion";
 import {
   User, Settings, Shield, Lock, CheckCircle2, Loader2,
   Bot, Sparkles, UserCheck, Zap, LayoutDashboard, LogOut,
+  Eye, EyeOff,
 } from "lucide-react";
 import LandingNav from "@/components/LandingNav";
 import LandingFooter from "@/components/LandingFooter";
 import { useAuth } from "@/lib/auth-context";
 import { api, ApiError, TradingMode } from "@/lib/api";
+
+/* ── Reusable password input with show/hide toggle ─────────────────────────── */
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        required={required}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-border bg-surface-2 px-4 py-2.5 pr-10 text-sm outline-none focus:border-accent transition-colors"
+      />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
+        tabIndex={-1}
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </div>
+  );
+}
 
 const EXPERIENCE_OPTIONS = [
   { value: "beginner", label: "Beginner" },
@@ -382,25 +419,24 @@ export default function ProfilePage() {
                 <div className="space-y-4 max-w-sm">
                   <div>
                     <label className="text-sm font-medium text-muted">Current Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm outline-none focus:border-accent transition-colors"
-                    />
+                    <div className="mt-1.5">
+                      <PasswordInput
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted">New Password</label>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="At least 6 characters"
-                      className="mt-1.5 w-full rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm outline-none focus:border-accent transition-colors"
-                    />
+                    <div className="mt-1.5">
+                      <PasswordInput
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                      />
+                    </div>
                   </div>
                 </div>
 

@@ -3,9 +3,51 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api, ApiError } from "@/lib/api";
 import AuthSplit from "@/components/AuthSplit";
+
+/* ── Reusable password input with show/hide toggle ─────────────────────────── */
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  required,
+  className,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  required?: boolean;
+  className?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        required={required}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={clsx(
+          "w-full rounded-lg border border-border bg-surface px-4 py-2.5 pr-10 outline-none focus:border-accent transition-colors",
+          className
+        )}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
+        tabIndex={-1}
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
 
 type Face = "login" | "register" | "forgot" | "reset";
 
@@ -140,14 +182,14 @@ function LoginForm({ onRegister, onForgot }: { onRegister: () => void; onForgot:
             Forgot password?
           </button>
         </div>
-        <input
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
-          placeholder="••••••••"
-        />
+        <div className="mt-1">
+          <PasswordInput
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+          />
+        </div>
       </div>
       {error && (
         <p className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -348,25 +390,25 @@ function ResetPasswordForm({ onDone }: { onDone: () => void }) {
       </div>
       <div>
         <label className="text-sm text-muted">New password</label>
-        <input
-          type="password"
-          required
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
-          placeholder="At least 6 characters"
-        />
+        <div className="mt-1">
+          <PasswordInput
+            required
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="At least 6 characters"
+          />
+        </div>
       </div>
       <div>
         <label className="text-sm text-muted">Confirm password</label>
-        <input
-          type="password"
-          required
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
-          placeholder="Repeat new password"
-        />
+        <div className="mt-1">
+          <PasswordInput
+            required
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Repeat new password"
+          />
+        </div>
       </div>
       {error && (
         <p className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -478,13 +520,13 @@ function RegisterForm({ onFlip }: { onFlip: () => void }) {
           </div>
           <div>
             <label className="text-sm text-muted">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-surface px-4 py-2.5 outline-none focus:border-accent transition-colors"
-              placeholder="At least 6 characters"
-            />
+            <div className="mt-1">
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
           </div>
           {error && (
             <p className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
