@@ -459,7 +459,7 @@ function DashboardPreview() {
               </div>
               <Link href="/register"
                 className="rounded-xl bg-gradient-to-r from-accent to-amber-400 px-4 py-2 text-sm font-semibold text-black hover:shadow-lg hover:shadow-accent/30 transition-all">
-                Explain Decision
+                Try it Live
               </Link>
             </div>
           </div>

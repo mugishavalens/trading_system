@@ -37,18 +37,18 @@ SYMBOLS = {
     "META":     {"name": "Meta Platforms",    "asset_class": "stock",     "base_price": 510,     "vol": 0.016},
 
     # ── Commodities ──────────────────────────────────────────────────────────
-    "GOLD":     {"name": "Gold Spot",         "asset_class": "commodity", "base_price": 2_320,   "vol": 0.008},
-    "SILVER":   {"name": "Silver Spot",       "asset_class": "commodity", "base_price": 27.50,   "vol": 0.012},
-    "USOIL":    {"name": "US Crude Oil WTI",  "asset_class": "commodity", "base_price": 79.50,   "vol": 0.015},
+    "GOLD":     {"name": "Gold",              "asset_class": "commodity", "base_price": 2_320,   "vol": 0.008},
+    "SILVER":   {"name": "Silver",            "asset_class": "commodity", "base_price": 27.50,   "vol": 0.012},
+    "USOIL":    {"name": "Crude Oil (WTI)",   "asset_class": "commodity", "base_price": 79.50,   "vol": 0.015},
     "NATGAS":   {"name": "Natural Gas",       "asset_class": "commodity", "base_price": 2.30,    "vol": 0.025},
 
     # ── Indices ──────────────────────────────────────────────────────────────
-    "SPX500":   {"name": "S&P 500 Index",       "asset_class": "index",     "base_price": 5_300,   "vol": 0.008},
-    "NAS100":   {"name": "Nasdaq 100",           "asset_class": "index",     "base_price": 18_500,  "vol": 0.010},
-    "DJI30":    {"name": "Dow Jones Industrial", "asset_class": "index",     "base_price": 39_500,  "vol": 0.007},
-    "RUT2000":  {"name": "Russell 2000",         "asset_class": "index",     "base_price": 2_050,   "vol": 0.012},
-    "NYSE":     {"name": "NYSE Composite",       "asset_class": "index",     "base_price": 19_400,  "vol": 0.007},
-    "DAX40":    {"name": "DAX 40 (Germany)",     "asset_class": "index",     "base_price": 18_200,  "vol": 0.009},
+    "SPX500":   {"name": "S&P 500",           "asset_class": "index",     "base_price": 5_300,   "vol": 0.008},
+    "DJIA":     {"name": "Dow Jones (DJIA)",  "asset_class": "index",     "base_price": 39_500,  "vol": 0.007},
+    "NAS100":   {"name": "Nasdaq 100",        "asset_class": "index",     "base_price": 18_500,  "vol": 0.010},
+    "RUT2000":  {"name": "Russell 2000",      "asset_class": "index",     "base_price": 2_050,   "vol": 0.012},
+    "NYSE":     {"name": "NYSE Composite",    "asset_class": "index",     "base_price": 19_400,  "vol": 0.007},
+    "DAX40":    {"name": "DAX 40",            "asset_class": "index",     "base_price": 18_200,  "vol": 0.009},
 }
 
 HISTORY_LENGTH = 180

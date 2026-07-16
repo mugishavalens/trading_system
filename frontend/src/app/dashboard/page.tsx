@@ -67,6 +67,7 @@ function DashboardContent() {
 
   const [pending, setPending] = useState<PendingTrade[]>([]);
   const [pendingBusyId, setPendingBusyId] = useState<number | null>(null);
+  const [pendingErrors, setPendingErrors] = useState<Record<number, string>>({});
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [chartExpanded, setChartExpanded] = useState(false);
@@ -153,9 +154,18 @@ function DashboardContent() {
   async function handleApprovePending(id: number) {
     if (!token) return;
     setPendingBusyId(id);
+    // Clear any previous error for this trade
+    setPendingErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
     try {
       await api.approvePendingTrade(token, id);
       await Promise.all([refreshPending(), refreshAccount(), refreshUser()]);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to approve trade.";
+      setPendingErrors((prev) => ({ ...prev, [id]: msg }));
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        setPendingErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
+      }, 5000);
     } finally {
       setPendingBusyId(null);
     }
@@ -259,35 +269,55 @@ function DashboardContent() {
             {pending.map((p) => (
               <div
                 key={p.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background/60 p-3"
+                className="rounded-lg border border-border bg-background/60 overflow-hidden"
               >
-                <div>
-                  <p className="text-sm">
-                    <span className={p.side === "BUY" ? "text-success" : "text-danger"}>
-                      {p.side}
-                    </span>{" "}
-                    <span className="font-medium">{p.symbol}</span> · qty{" "}
-                    {p.quantity.toFixed(4)} · {p.confidence.toFixed(0)}% confidence ·{" "}
-                    {p.risk_level} risk
-                  </p>
-                  <p className="mt-1 text-xs text-muted">{p.reason}</p>
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+                  <div>
+                    <p className="text-sm">
+                      <span className={p.side === "BUY" ? "text-success" : "text-danger"}>
+                        {p.side}
+                      </span>{" "}
+                      <span className="font-medium">{p.symbol}</span> · qty{" "}
+                      {p.quantity.toFixed(4)} · {p.confidence.toFixed(0)}% confidence ·{" "}
+                      {p.risk_level} risk
+                    </p>
+                    <p className="mt-1 text-xs text-muted">{p.reason}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprovePending(p.id)}
+                      disabled={pendingBusyId === p.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-black hover:bg-accent-2 disabled:opacity-50 transition-colors"
+                    >
+                      <Check size={14} /> Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectPending(p.id)}
+                      disabled={pendingBusyId === p.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50 transition-colors"
+                    >
+                      <X size={14} /> Reject
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleApprovePending(p.id)}
-                    disabled={pendingBusyId === p.id}
-                    className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-black hover:bg-accent-2 disabled:opacity-50 transition-colors"
-                  >
-                    <Check size={14} /> Approve
-                  </button>
-                  <button
-                    onClick={() => handleRejectPending(p.id)}
-                    disabled={pendingBusyId === p.id}
-                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50 transition-colors"
-                  >
-                    <X size={14} /> Reject
-                  </button>
-                </div>
+                {pendingErrors[p.id] && (
+                  <div className="flex items-center justify-between gap-2 border-t border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                    <span>⚠ {pendingErrors[p.id]}</span>
+                    <button
+                      onClick={() =>
+                        setPendingErrors((prev) => {
+                          const next = { ...prev };
+                          delete next[p.id];
+                          return next;
+                        })
+                      }
+                      className="ml-2 rounded p-0.5 hover:bg-danger/20 transition-colors"
+                      aria-label="Dismiss error"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

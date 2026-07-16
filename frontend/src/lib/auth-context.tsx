@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { api, UserResponse } from "./api";
+import { api, ApiError, UserResponse } from "./api";
 
 interface AuthContextValue {
   token: string | null;
@@ -40,9 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       return u;
     } catch (err) {
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem(STORAGE_KEY);
+      // Only clear the session on a genuine 401 — an expired or invalid token.
+      // Network errors (backend restarting, offline, etc.) must NOT log the user
+      // out; the token is still valid and the session should survive.
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem(STORAGE_KEY);
+      }
       throw err;
     }
   }, []);

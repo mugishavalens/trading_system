@@ -5,7 +5,7 @@ import clsx from "clsx";
 import { ChevronDown, TrendingUp, TrendingDown, Minus, Search, X } from "lucide-react";
 import {
   createChart, CandlestickSeries, LineSeries,
-  ColorType, UTCTimestamp, LineStyle, MouseEventParams,
+  ColorType, UTCTimestamp, LineStyle,
 } from "lightweight-charts";
 import { api, AIRecommendation, Candle, SymbolInfo } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -14,12 +14,34 @@ import { useTheme } from "@/lib/theme-context";
 
 /* ─── Asset class groups ────────────────────────────────────────────────── */
 const GROUPS = [
-  { key: "crypto",    label: "CRYPTO",      emoji: "₿"  },
-  { key: "forex",     label: "FOREX",       emoji: "💱" },
-  { key: "stock",     label: "STOCKS",      emoji: "📈" },
-  { key: "commodity", label: "COMMODITIES", emoji: "🥇" },
-  { key: "index",     label: "INDICES",     emoji: "📊" },
+  { key: "crypto",    label: "Crypto",      accent: "#f59e0b" },
+  { key: "forex",     label: "Forex",       accent: "#38bdf8" },
+  { key: "stock",     label: "Stocks",      accent: "#22c55e" },
+  { key: "index",     label: "Indices",     accent: "#a78bfa" },
+  { key: "commodity", label: "Commodities", accent: "#fb923c" },
 ];
+
+/* Short badge labels for well-known tickers */
+const BADGE_LABELS: Record<string, string> = {
+  "BTC/USD": "BTC", "ETH/USD": "ETH", "SOL/USD": "SOL", "XRP/USD": "XRP",
+  "BNB/USD": "BNB", "ADA/USD": "ADA",
+  "EUR/USD": "EUR", "GBP/USD": "GBP", "USD/JPY": "JPY", "AUD/USD": "AUD",
+  "USD/CAD": "CAD", "NZD/USD": "NZD", "USD/CHF": "CHF",
+  "AAPL": "AAPL", "TSLA": "TSLA", "GOOGL": "GOOG", "MSFT": "MSFT",
+  "AMZN": "AMZN", "NVDA": "NVDA", "META": "META",
+  "GOLD": "XAU", "SILVER": "XAG", "USOIL": "OIL", "NATGAS": "GAS",
+  "SPX500": "SPX", "DJIA": "DJI", "NAS100": "NDX", "RUT2000": "RUT",
+  "NYSE": "NYA", "DAX40": "DAX",
+};
+
+/* Per-asset-class badge accent colors */
+const CLASS_ACCENT: Record<string, string> = {
+  crypto:    "#f59e0b",
+  forex:     "#38bdf8",
+  stock:     "#22c55e",
+  index:     "#a78bfa",
+  commodity: "#fb923c",
+};
 
 const SENTIMENT: Record<string, { icon: typeof TrendingUp; cls: string }> = {
   BUY:  { icon: TrendingUp,   cls: "text-success" },
@@ -236,9 +258,11 @@ function SymbolRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const positive = symbol.change_pct_24h >= 0;
-  const SentIcon = rec ? SENTIMENT[rec.action]?.icon : null;
-  const sentCls  = rec ? SENTIMENT[rec.action]?.cls  : "";
+  const positive  = symbol.change_pct_24h >= 0;
+  const SentIcon  = rec ? SENTIMENT[rec.action]?.icon : null;
+  const sentCls   = rec ? SENTIMENT[rec.action]?.cls  : "";
+  const badge     = BADGE_LABELS[symbol.symbol] ?? symbol.symbol.slice(0, 3);
+  const badgeColor = CLASS_ACCENT[symbol.asset_class] ?? "#f59e0b";
 
   return (
     <div className="border-b border-border last:border-0">
@@ -247,8 +271,11 @@ function SymbolRow({
         className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-2 transition-colors text-sm"
       >
         {/* Symbol badge */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">
-          {symbol.symbol.slice(0, 2)}
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+          style={{ backgroundColor: `${badgeColor}20`, color: badgeColor }}
+        >
+          {badge}
         </div>
 
         {/* Symbol name */}
@@ -264,8 +291,8 @@ function SymbolRow({
               ? symbol.last_price.toFixed(4)
               : symbol.last_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </p>
-          <p className={clsx("text-xs tabular-nums", positive ? "text-success" : "text-danger")}>
-            {positive ? "+" : ""}{symbol.change_pct_24h.toFixed(2)}%
+          <p className={clsx("text-xs tabular-nums font-medium", positive ? "text-success" : "text-danger")}>
+            {positive ? "▲" : "▼"} {Math.abs(symbol.change_pct_24h).toFixed(2)}%
           </p>
         </div>
 
@@ -285,14 +312,14 @@ function SymbolRow({
 /* ─── Group section ──────────────────────────────────────────────────────── */
 function GroupSection({
   label,
-  emoji,
+  accent,
   symbols,
   recs,
   expandedSymbol,
   onToggle,
 }: {
   label: string;
-  emoji: string;
+  accent: string;
   symbols: SymbolInfo[];
   recs: Record<string, AIRecommendation>;
   expandedSymbol: string | null;
@@ -306,11 +333,20 @@ function GroupSection({
     <div className="border-b border-border last:border-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-muted hover:text-foreground transition-colors"
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold tracking-wide text-muted hover:text-foreground hover:bg-surface-2 transition-colors"
       >
-        <ChevronDown size={12} className={clsx("transition-transform", !open && "-rotate-90")} />
-        <span>{emoji} {label}</span>
-        <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-xs font-medium">
+        <ChevronDown
+          size={12}
+          className={clsx("transition-transform duration-200", !open && "-rotate-90")}
+          style={{ color: accent }}
+        />
+        <span style={{ color: accent }} className="font-bold tracking-widest uppercase">
+          {label}
+        </span>
+        <span
+          className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ backgroundColor: `${accent}20`, color: accent }}
+        >
           {symbols.length}
         </span>
       </button>
@@ -401,11 +437,11 @@ export default function MarketsPage() {
           <div className="shrink-0 w-5" />
         </div>
 
-        {GROUPS.map(({ key, label, emoji }) => (
+        {GROUPS.map(({ key, label, accent }) => (
           <GroupSection
             key={key}
             label={label}
-            emoji={emoji}
+            accent={accent}
             symbols={filtered.filter((s) => s.asset_class === key)}
             recs={recs}
             expandedSymbol={expanded}
