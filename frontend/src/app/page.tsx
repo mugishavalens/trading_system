@@ -332,6 +332,9 @@ function AIPersonas() {
 
 // ── AI Debate ─────────────────────────────────────────────────────────────────
 function AIDebate() {
+  const { user } = useAuth();
+  const dest = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/register";
+  const label = user ? "See it in your Dashboard" : "See it live in your account";
   return (
     <section id="ai-debate" className="scroll-mt-20 px-6 py-24">
       <div className="mx-auto max-w-5xl">
@@ -387,9 +390,9 @@ function AIDebate() {
 
         <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.8 }}
           className="mt-8 text-center">
-          <Link href="/register"
+          <Link href={dest}
             className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-amber-400 px-6 py-3 font-semibold text-black shadow-lg shadow-accent/30 hover:shadow-accent/50 transition-all hover:scale-105">
-            See it live in your account <ArrowRight size={15} />
+            {label} <ArrowRight size={15} />
           </Link>
         </motion.div>
       </div>
@@ -429,6 +432,9 @@ function HowItWorks() {
 
 // ── Dashboard Preview ─────────────────────────────────────────────────────────
 function DashboardPreview() {
+  const { user } = useAuth();
+  const dest = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/register";
+
   return (
     <section id="dashboard-preview" className="scroll-mt-20 px-6 py-24">
       <div className="mx-auto max-w-5xl">
@@ -457,9 +463,9 @@ function DashboardPreview() {
                   <p className="text-sm text-success font-medium">BUY · 91% confidence</p>
                 </div>
               </div>
-              <Link href="/register"
+              <Link href={dest}
                 className="rounded-xl bg-gradient-to-r from-accent to-amber-400 px-4 py-2 text-sm font-semibold text-black hover:shadow-lg hover:shadow-accent/30 transition-all">
-                Try it Live
+                {user ? "Go to Dashboard" : "Try it Live"}
               </Link>
             </div>
           </div>
@@ -521,6 +527,9 @@ function Testimonials() {
 
 // ── Call To Action ────────────────────────────────────────────────────────────
 function CallToAction() {
+  const { user } = useAuth();
+  const dest = user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/register";
+  const label = user ? "Go to Dashboard" : "Start Free Demo";
   return (
     <section className="px-6 py-24">
       <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
@@ -537,9 +546,9 @@ function CallToAction() {
         <h2 className="text-4xl font-extrabold text-foreground">Ready to trade smarter?</h2>
         <p className="mt-4 text-muted text-lg">No real money, no risk — just a realistic sandbox to learn how an AI-assisted trading desk actually works.</p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/register"
+          <Link href={dest}
             className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent to-amber-400 px-8 py-3.5 font-semibold text-black shadow-xl shadow-accent/40 hover:shadow-accent/60 transition-all hover:scale-105">
-            <span className="flex items-center gap-2">Start Free Demo <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></span>
+            <span className="flex items-center gap-2">{label} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></span>
           </Link>
           <Link href="/learn"
             className="flex items-center gap-2 rounded-2xl border border-border bg-surface/80 px-8 py-3.5 font-medium text-foreground hover:bg-surface transition-all">
