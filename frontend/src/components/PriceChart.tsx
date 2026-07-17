@@ -72,10 +72,13 @@ const DRAW_TOOLS: {
 }[] = [
   { key: "none",      label: "Select",      icon: MousePointer, color: "",         hint: "" },
   { key: "hline",     label: "H. Line",     icon: Minus,        color: "#f59e0b",  hint: "Click to place support / resistance line" },
-  { key: "trendline", label: "Trendline",   icon: TrendingUp,   color: "#22c55e",  hint: "Click two points to draw a trendline" },
-  { key: "channel",   label: "Channel",     icon: Layers,       color: "#38bdf8",  hint: "Click two points — sets channel direction; drag height to set width" },
-  { key: "fibonacci", label: "Fibonacci",   icon: GitBranch,    color: "#a78bfa",  hint: "Click swing high then swing low (or low→high)" },
+  { key: "trendline", label: "Trendline",   icon: TrendingUp,   color: "#22c55e",  hint: "Click and drag to draw a trendline" },
+  { key: "channel",   label: "Channel",     icon: Layers,       color: "#38bdf8",  hint: "Click and drag to draw a channel" },
+  { key: "fibonacci", label: "Fibonacci",   icon: GitBranch,    color: "#a78bfa",  hint: "Click and drag from swing high to swing low (or reverse)" },
 ];
+
+/** Pixel movement below this is treated as a click, not a drag. */
+const DRAG_THRESHOLD_PX = 4;
 
 /* ─── Candle aggregation ─────────────────────────────────────────────────── */
 function aggregateCandles(candles: Candle[], minutes: number): Candle[] {
@@ -134,20 +137,35 @@ export default function PriceChart({
   const chartRef          = useRef<IChartApi | null>(null);
   const candleSeriesRef   = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const drawnObjectsRef   = useRef<DrawnObject[]>([]);
+  /** Anchor (first) point of a two-point tool — set once the user has pressed down or plain-clicked. */
   const pendingPointRef   = useRef<{ time: UTCTimestamp; price: number } | null>(null);
+  /** Live preview series shown while dragging / hovering after the anchor is placed. */
+  const previewSeriesRef  = useRef<ISeriesApi<"Line">[]>([]);
+  /** Client (pixel) coords of the mousedown that started the current gesture — used to tell a drag from a click. */
+  const gestureDownRef    = useRef<{ x: number; y: number } | null>(null);
+  const mouseDownRef      = useRef(false);
   const displayCandlesRef = useRef<Candle[]>([]);
+  const drawToolRef       = useRef<DrawTool>("none");
 
   const { theme } = useTheme();
   const [timeframe,       setTimeframe]       = useState<Timeframe>("M1");
   const [drawTool,        setDrawTool]        = useState<DrawTool>("none");
   const [drawnList,       setDrawnList]       = useState<Omit<DrawnObject, "series">[]>([]);
   const [awaitingSecond,  setAwaitingSecond]  = useState(false);
+  const [isDragging,      setIsDragging]      = useState(false);
   const [showDrawings,    setShowDrawings]    = useState(false);
 
   /* ── derived candles ── */
   const tf = TIMEFRAMES.find((t) => t.key === timeframe)!;
   const displayCandles = aggregateCandles(candles, tf.minutes);
   displayCandlesRef.current = displayCandles;
+
+  /* ── remove the in-progress live-preview series (drag / hover-to-second-click) ── */
+  const clearPreview = useCallback(() => {
+    const chart = chartRef.current;
+    previewSeriesRef.current.forEach((s) => { try { chart?.removeSeries(s); } catch { /* gone */ } });
+    previewSeriesRef.current = [];
+  }, []);
 
   /* ── sync drawnList state from ref (for rendering) ── */
   function syncList() {
@@ -197,6 +215,14 @@ export default function PriceChart({
     chart.timeScale().fitContent();
     chartRef.current      = chart;
     candleSeriesRef.current = series;
+
+    /* Disable drag-to-pan while a drawing tool is active, so mouse-drag draws instead of panning. */
+    if (drawToolRef.current !== "none") {
+      chart.applyOptions({
+        handleScroll: { pressedMouseMove: false },
+        handleScale:  { axisPressedMouseMove: false },
+      });
+    }
 
     /* Re-attach drawn objects after chart rebuild */
     drawnObjectsRef.current = drawnObjectsRef.current.map((obj) => {
@@ -254,125 +280,229 @@ export default function PriceChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, timeframe]);
 
-  /* ── Chart click handler ── */
+  /* ── Toggle drag-to-pan on the live chart whenever the active tool changes ── */
+  useEffect(() => {
+    drawToolRef.current = drawTool;
+    const chart = chartRef.current;
+    if (!chart) return;
+    const drawingActive = drawTool !== "none";
+    chart.applyOptions({
+      handleScroll: { pressedMouseMove: !drawingActive },
+      handleScale:  { axisPressedMouseMove: !drawingActive },
+    });
+  }, [drawTool]);
+
+  /* ── Chart mousedown / mousemove / mouseup — click-and-drag drawing, MT5/TradingView-style ── */
   useEffect(() => {
     const container = containerRef.current;
     if (!container || drawTool === "none") return;
 
-    const colors = chartColors(theme);
-
-    function onContainerClick(e: MouseEvent) {
+    /** Convert a mouse event's client coords into chart (time, price). */
+    function pointAt(e: { clientX: number; clientY: number }): { time: UTCTimestamp; price: number } | null {
       const chart  = chartRef.current;
       const series = candleSeriesRef.current;
-      if (!chart || !series || !container) return;
-
+      if (!chart || !series || !container) return null;
       const rect  = container.getBoundingClientRect();
-      const x     = e.clientX - rect.left;
-      const y     = e.clientY - rect.top;
+      const price = series.coordinateToPrice(e.clientY - rect.top);
+      if (price === null) return null;
+      const time = chart.timeScale().coordinateToTime(e.clientX - rect.left) as UTCTimestamp | null;
+      if (!time) return null;
+      return { time, price };
+    }
 
-      const price = series.coordinateToPrice(y);
-      if (price === null) return;
-      const time = chart.timeScale().coordinateToTime(x) as UTCTimestamp | null;
-      if (!time) return;
-
+    /** Create (once) or reuse the live-preview series for the given tool, then update their data. */
+    function updatePreview(tool: DrawTool, aRaw: { time: UTCTimestamp; price: number }, bRaw: { time: UTCTimestamp; price: number }) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      const colors = chartColors(theme);
       const dc = displayCandlesRef.current;
       const pts = dc.map((c) => (new Date(c.time).getTime() / 1000) as UTCTimestamp);
       const t0 = pts[0], t1 = pts[pts.length - 1];
+      const [a, b] = aRaw.time <= bRaw.time ? [aRaw, bRaw] : [bRaw, aRaw];
+      // Two points landing on the same candle give a zero-width segment, which
+      // lightweight-charts rejects (line series requires strictly ascending times).
+      if ((tool === "trendline" || tool === "channel") && a.time === b.time) return;
 
-      /* ── Horizontal line (single click) ── */
-      if (drawTool === "hline") {
-        const s = addLineSeries(chart, { color: colors.accent, width: 2, style: LineStyle.Dashed, lastVisible: true, title: "S/R" });
-        s.setData(dc.map((c) => ({ time: (new Date(c.time).getTime() / 1000) as UTCTimestamp, value: price })));
-        const obj: DrawnObject = {
-          id: crypto.randomUUID(), type: "hline",
-          label: `H-Line @ ${price.toFixed(4)}`,
-          color: colors.accent,
-          price, series: [s],
-        };
-        drawnObjectsRef.current.push(obj);
-        syncList();
-        return;
-      }
-
-      /* ── Two-point tools ── */
-      if (drawTool === "trendline" || drawTool === "channel" || drawTool === "fibonacci") {
-        if (!pendingPointRef.current) {
-          pendingPointRef.current = { time, price };
-          setAwaitingSecond(true);
-          return;
+      if (tool === "trendline") {
+        if (previewSeriesRef.current.length !== 1) {
+          clearPreview();
+          previewSeriesRef.current = [addLineSeries(chart, { color: colors.success, width: 2, style: LineStyle.Dashed, title: "Trend" })];
         }
+        previewSeriesRef.current[0].setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
 
-        const p1 = pendingPointRef.current;
-        const p2 = { time, price };
-        pendingPointRef.current = null;
-        setAwaitingSecond(false);
-
-        const [a, b] = p1.time <= p2.time ? [p1, p2] : [p2, p1];
-
-        /* ── Trendline ── */
-        if (drawTool === "trendline") {
-          const s = addLineSeries(chart, { color: colors.success, width: 2, style: LineStyle.Solid, title: "Trend" });
-          s.setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
-          const obj: DrawnObject = {
-            id: crypto.randomUUID(), type: "trendline",
-            label: `Trendline`,
-            color: colors.success,
-            p1: a, p2: b, series: [s],
-          };
-          drawnObjectsRef.current.push(obj);
-          syncList();
+      } else if (tool === "channel") {
+        if (previewSeriesRef.current.length !== 2) {
+          clearPreview();
+          previewSeriesRef.current = [
+            addLineSeries(chart, { color: "#38bdf8", width: 2, style: LineStyle.Solid,  title: "Ch+" }),
+            addLineSeries(chart, { color: "#38bdf8", width: 1, style: LineStyle.Dashed, title: "Ch−" }),
+          ];
         }
+        const gap = Math.abs(a.price - b.price) * 0.4;
+        previewSeriesRef.current[0].setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
+        previewSeriesRef.current[1].setData([{ time: a.time, value: a.price - gap }, { time: b.time, value: b.price - gap }]);
 
-        /* ── Channel (two parallel lines — offset by a fraction of swing) ── */
-        if (drawTool === "channel") {
-          const gap = Math.abs(a.price - b.price) * 0.4; // channel width = 40% of trendline height
-          const s1 = addLineSeries(chart, { color: "#38bdf8", width: 2, style: LineStyle.Solid, title: "Ch+" });
-          s1.setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
-          const s2 = addLineSeries(chart, { color: "#38bdf8", width: 1, style: LineStyle.Dashed, title: "Ch−" });
-          s2.setData([{ time: a.time, value: a.price - gap }, { time: b.time, value: b.price - gap }]);
-          const obj: DrawnObject = {
-            id: crypto.randomUUID(), type: "channel",
-            label: `Channel`,
-            color: "#38bdf8",
-            p1: a, p2: b,
-            p3: { time: a.time, price: a.price - gap },
-            p4: { time: b.time, price: b.price - gap },
-            series: [s1, s2],
-          };
-          drawnObjectsRef.current.push(obj);
-          syncList();
+      } else if (tool === "fibonacci") {
+        if (previewSeriesRef.current.length !== FIB_LEVELS.length) {
+          clearPreview();
+          previewSeriesRef.current = FIB_LEVELS.map((_, i) =>
+            addLineSeries(chart, { color: FIB_COLORS[i], width: 1, style: LineStyle.Dashed, title: FIB_LABELS[i], lastVisible: true })
+          );
         }
-
-        /* ── Fibonacci retracement ── */
-        if (drawTool === "fibonacci") {
-          const high = Math.max(a.price, b.price);
-          const low  = Math.min(a.price, b.price);
-          const swing = high - low;
-          const levels = FIB_LEVELS.map((f) => high - f * swing);
-          const fibSeries: ISeriesApi<"Line">[] = [];
-          levels.forEach((lvl, i) => {
-            const s = addLineSeries(chart, { color: FIB_COLORS[i], width: 1, style: LineStyle.Dashed, title: FIB_LABELS[i], lastVisible: true });
-            s.setData([{ time: t0, value: lvl }, { time: t1, value: lvl }]);
-            fibSeries.push(s);
-          });
-          const obj: DrawnObject = {
-            id: crypto.randomUUID(), type: "fibonacci",
-            label: `Fibonacci`,
-            color: "#a78bfa",
-            p1: a, p2: b,
-            fibLevels: levels,
-            series: fibSeries,
-          };
-          drawnObjectsRef.current.push(obj);
-          syncList();
-        }
+        const high = Math.max(a.price, b.price);
+        const low  = Math.min(a.price, b.price);
+        const swing = high - low;
+        FIB_LEVELS.forEach((f, i) => {
+          previewSeriesRef.current[i].setData([{ time: t0, value: high - f * swing }, { time: t1, value: high - f * swing }]);
+        });
       }
     }
 
-    container.addEventListener("click", onContainerClick);
-    return () => container.removeEventListener("click", onContainerClick);
+    /** Commit the anchor→end gesture as a permanent drawn object. */
+    function finalize(tool: DrawTool, p1: { time: UTCTimestamp; price: number }, p2: { time: UTCTimestamp; price: number }) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      const colors = chartColors(theme);
+      const dc = displayCandlesRef.current;
+      const pts = dc.map((c) => (new Date(c.time).getTime() / 1000) as UTCTimestamp);
+      const t0 = pts[0], t1 = pts[pts.length - 1];
+      const [a, b] = p1.time <= p2.time ? [p1, p2] : [p2, p1];
+      // Same-candle endpoints would be a zero-width segment — lightweight-charts
+      // rejects duplicate times, so just discard the gesture instead of crashing.
+      if ((tool === "trendline" || tool === "channel") && a.time === b.time) return;
+
+      if (tool === "trendline") {
+        const s = addLineSeries(chart, { color: colors.success, width: 2, style: LineStyle.Solid, title: "Trend" });
+        s.setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
+        drawnObjectsRef.current.push({
+          id: crypto.randomUUID(), type: "trendline", label: "Trendline",
+          color: colors.success, p1: a, p2: b, series: [s],
+        });
+        syncList();
+
+      } else if (tool === "channel") {
+        const gap = Math.abs(a.price - b.price) * 0.4; // channel width = 40% of trendline height
+        const s1 = addLineSeries(chart, { color: "#38bdf8", width: 2, style: LineStyle.Solid, title: "Ch+" });
+        s1.setData([{ time: a.time, value: a.price }, { time: b.time, value: b.price }]);
+        const s2 = addLineSeries(chart, { color: "#38bdf8", width: 1, style: LineStyle.Dashed, title: "Ch−" });
+        s2.setData([{ time: a.time, value: a.price - gap }, { time: b.time, value: b.price - gap }]);
+        drawnObjectsRef.current.push({
+          id: crypto.randomUUID(), type: "channel", label: "Channel", color: "#38bdf8",
+          p1: a, p2: b,
+          p3: { time: a.time, price: a.price - gap },
+          p4: { time: b.time, price: b.price - gap },
+          series: [s1, s2],
+        });
+        syncList();
+
+      } else if (tool === "fibonacci") {
+        const high = Math.max(a.price, b.price);
+        const low  = Math.min(a.price, b.price);
+        const swing = high - low;
+        const levels = FIB_LEVELS.map((f) => high - f * swing);
+        const fibSeries = levels.map((lvl, i) => {
+          const s = addLineSeries(chart, { color: FIB_COLORS[i], width: 1, style: LineStyle.Dashed, title: FIB_LABELS[i], lastVisible: true });
+          s.setData([{ time: t0, value: lvl }, { time: t1, value: lvl }]);
+          return s;
+        });
+        drawnObjectsRef.current.push({
+          id: crypto.randomUUID(), type: "fibonacci", label: "Fibonacci", color: "#a78bfa",
+          p1: a, p2: b, fibLevels: levels, series: fibSeries,
+        });
+        syncList();
+      }
+    }
+
+    function onMouseDown(e: MouseEvent) {
+      const colors = chartColors(theme);
+      const pt = pointAt(e);
+      if (!pt) return;
+
+      mouseDownRef.current = true;
+      gestureDownRef.current = { x: e.clientX, y: e.clientY };
+
+      /* ── Horizontal line: placed instantly on press ── */
+      if (drawTool === "hline") {
+        const chart = chartRef.current;
+        if (!chart) return;
+        const dc = displayCandlesRef.current;
+        const s = addLineSeries(chart, { color: colors.accent, width: 2, style: LineStyle.Dashed, lastVisible: true, title: "S/R" });
+        s.setData(dc.map((c) => ({ time: (new Date(c.time).getTime() / 1000) as UTCTimestamp, value: pt.price })));
+        drawnObjectsRef.current.push({
+          id: crypto.randomUUID(), type: "hline",
+          label: `H-Line @ ${pt.price.toFixed(4)}`,
+          color: colors.accent, price: pt.price, series: [s],
+        });
+        syncList();
+        mouseDownRef.current = false;
+        return;
+      }
+
+      /* ── Two-point tools: first press sets the anchor (unless one is already pending) ── */
+      if (!pendingPointRef.current) pendingPointRef.current = pt;
+      setIsDragging(true);
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      if (drawTool !== "trendline" && drawTool !== "channel" && drawTool !== "fibonacci") return;
+      if (!pendingPointRef.current) return;
+      const pt = pointAt(e);
+      if (!pt) return;
+      updatePreview(drawTool, pendingPointRef.current, pt);
+    }
+
+    function onMouseUp(e: MouseEvent) {
+      if (drawTool === "hline") { mouseDownRef.current = false; return; }
+      if (!mouseDownRef.current) return;
+      mouseDownRef.current = false;
+      setIsDragging(false);
+
+      const down = gestureDownRef.current;
+      gestureDownRef.current = null;
+      if (!pendingPointRef.current) return;
+      const pt = pointAt(e);
+      if (!pt) return;
+
+      const movedPx = down ? Math.hypot(e.clientX - down.x, e.clientY - down.y) : Infinity;
+
+      /* A plain click (no drag) just places the anchor — wait for a second click/drag to finish. */
+      if (movedPx < DRAG_THRESHOLD_PX && !awaitingSecond) {
+        setAwaitingSecond(true);
+        updatePreview(drawTool, pendingPointRef.current, pt);
+        return;
+      }
+
+      /* Either a real drag, or the closing second click — commit the object. */
+      finalize(drawTool, pendingPointRef.current, pt);
+      pendingPointRef.current = null;
+      setAwaitingSecond(false);
+      clearPreview();
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape" || !pendingPointRef.current) return;
+      pendingPointRef.current = null;
+      mouseDownRef.current = false;
+      gestureDownRef.current = null;
+      setAwaitingSecond(false);
+      setIsDragging(false);
+      clearPreview();
+    }
+
+    /* Capture phase: lightweight-charts attaches its own pan/crosshair handlers on the
+       canvas and stops propagation, so a bubble-phase listener here would never fire. */
+    container.addEventListener("mousedown", onMouseDown, true);
+    window.addEventListener("mousemove", onMouseMove, true);
+    window.addEventListener("mouseup", onMouseUp, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      container.removeEventListener("mousedown", onMouseDown, true);
+      window.removeEventListener("mousemove", onMouseMove, true);
+      window.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawTool, theme, timeframe, expanded]);
+  }, [drawTool, theme, timeframe, expanded, awaitingSecond, clearPreview]);
 
   /* ── Delete a single drawn object ── */
   const deleteObject = useCallback((id: string) => {
@@ -394,15 +524,21 @@ export default function PriceChart({
     });
     drawnObjectsRef.current = [];
     pendingPointRef.current = null;
+    mouseDownRef.current = false;
     setAwaitingSecond(false);
+    setIsDragging(false);
+    clearPreview();
     syncList();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [clearPreview]);
 
   /* ── Switch tool ── */
   function selectTool(t: DrawTool) {
     pendingPointRef.current = null;
+    mouseDownRef.current = false;
     setAwaitingSecond(false);
+    setIsDragging(false);
+    clearPreview();
     setDrawTool(t);
   }
 
@@ -479,7 +615,11 @@ export default function PriceChart({
         {/* Drawing hint */}
         {drawTool !== "none" && (
           <span className="text-xs text-accent animate-pulse">
-            {awaitingSecond ? "Click second point to complete" : toolInfo.hint}
+            {awaitingSecond
+              ? "Click (or drag) the second point to finish — Esc to cancel"
+              : isDragging
+              ? "Release to finish — Esc to cancel"
+              : toolInfo.hint}
           </span>
         )}
       </div>
@@ -526,7 +666,7 @@ export default function PriceChart({
       {/* ══════════════ CHART CANVAS ══════════════ */}
       <div
         ref={containerRef}
-        className="w-full rounded-xl overflow-hidden"
+        className="w-full select-none rounded-xl overflow-hidden"
         style={{ cursor: cursorStyle }}
       />
     </div>
