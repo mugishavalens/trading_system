@@ -12,16 +12,14 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 @router.get("", response_model=list[NotificationResponse])
 def list_notifications(
     limit: int = 50,
+    unread_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return (
-        db.query(Notification)
-        .filter(Notification.user_id == current_user.id)
-        .order_by(Notification.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+    if unread_only:
+        query = query.filter(Notification.is_read.is_(False))
+    return query.order_by(Notification.created_at.desc()).limit(limit).all()
 
 
 @router.get("/unread-count")

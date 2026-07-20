@@ -208,8 +208,11 @@ export const api = {
     request<{ status: string }>(`/api/alerts/${id}`, { method: "DELETE", token }),
 
   // ---- Notifications ----
-  notifications: (token: string, limit = 50) =>
-    request<NotificationItem[]>(`/api/notifications?limit=${limit}`, { token }),
+  notifications: (token: string, limit = 50, unreadOnly = false) =>
+    request<NotificationItem[]>(
+      `/api/notifications?limit=${limit}${unreadOnly ? "&unread_only=true" : ""}`,
+      { token }
+    ),
 
   unreadNotificationCount: (token: string) =>
     request<{ count: number }>("/api/notifications/unread-count", { token }),

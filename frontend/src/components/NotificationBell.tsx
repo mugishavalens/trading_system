@@ -29,11 +29,15 @@ export default function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const unreadItems = items.filter((n) => !n.is_read);
 
   const refresh = useCallback(async () => {
     if (!token) return;
+    // Unread-only, not "most recent 30 total" — otherwise an old unread
+    // notification outside that window would inflate the badge with no way
+    // to ever clear it from the list.
     const [list, { count }] = await Promise.all([
-      api.notifications(token, 30),
+      api.notifications(token, 100, true),
       api.unreadNotificationCount(token),
     ]);
     setItems(list);
@@ -56,8 +60,22 @@ export default function NotificationBell() {
 
   async function handleMarkAllRead() {
     if (!token) return;
+    setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setUnread(0);
     await api.markAllNotificationsRead(token);
-    await refresh();
+  }
+
+  async function handleItemClick(n: NotificationItem) {
+    if (!token || n.is_read) return;
+    // Opening a notification acknowledges it — it drops out of the (unread) list
+    // and the badge count, same as any normal notification tray.
+    setItems((prev) => prev.map((it) => (it.id === n.id ? { ...it, is_read: true } : it)));
+    setUnread((prev) => Math.max(0, prev - 1));
+    try {
+      await api.markNotificationRead(token, n.id);
+    } catch {
+      await refresh(); // reconcile if the optimistic update was wrong
+    }
   }
 
   return (
@@ -70,7 +88,7 @@ export default function NotificationBell() {
         <Bell size={15} />
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
-            {unread > 9 ? "9+" : unread}
+            {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
@@ -89,20 +107,22 @@ export default function NotificationBell() {
             )}
           </div>
           <div className="max-h-96 overflow-y-auto divide-y divide-border">
-            {items.length === 0 && (
-              <p className="px-3 py-6 text-center text-sm text-muted">No notifications yet.</p>
+            {unreadItems.length === 0 && (
+              <p className="px-3 py-6 text-center text-sm text-muted">You&rsquo;re all caught up.</p>
             )}
-            {items.map((n) => (
-              <div
+            {unreadItems.map((n) => (
+              <button
                 key={n.id}
-                className={`px-3 py-2.5 text-sm ${n.is_read ? "" : "bg-accent/5"}`}
+                onClick={() => handleItemClick(n)}
+                title="Mark as read"
+                className="flex w-full flex-col items-start gap-1 bg-accent/5 px-3 py-2.5 text-left text-sm hover:bg-accent/10 transition-colors"
               >
                 <p className="flex gap-2">
                   <span>{TYPE_ICON[n.type]}</span>
                   <span className="flex-1 text-foreground/90">{n.message}</span>
                 </p>
-                <p className="mt-1 pl-6 text-xs text-muted">{timeAgo(n.created_at)}</p>
-              </div>
+                <p className="pl-6 text-xs text-muted">{timeAgo(n.created_at)}</p>
+              </button>
             ))}
           </div>
         </div>

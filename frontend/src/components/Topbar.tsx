@@ -11,7 +11,7 @@ export default function Topbar() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="flex items-center justify-between border-b border-border bg-surface/60 px-6 py-4 backdrop-blur-sm">
+    <header className="relative z-20 flex items-center justify-between border-b border-border bg-surface/60 px-6 py-4 backdrop-blur-sm">
       <div>
         <p className="text-xs text-muted">
           {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
