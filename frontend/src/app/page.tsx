@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Bot, BookOpen, Newspaper, LineChart, ShieldCheck, Brain,
-  ArrowRight, PlayCircle, TrendingUp, Zap, Award, Users,
+  ArrowRight, PlayCircle, TrendingUp, Award, Users,
   ChevronRight, Star, BarChart2, MessageSquare, Cpu,
 } from "lucide-react";
 import LandingNav from "@/components/LandingNav";
@@ -185,12 +185,6 @@ function Hero() {
       </div>
 
       <div className="mx-auto max-w-5xl text-center w-full">
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-4 py-1.5 text-xs font-medium text-accent backdrop-blur-sm">
-          <Zap size={12} className="fill-accent" />
-          Demo mode · virtual funds only · not financial advice
-        </motion.div>
-
         <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1 }}
           className="mt-8 text-5xl font-extrabold tracking-tight sm:text-7xl leading-tight text-foreground drop-shadow-2xl">
           Your AI Trading Partner
