@@ -5,6 +5,14 @@ import clsx from "clsx";
 import { Sparkles, Loader2, ChevronDown, ShieldAlert, Newspaper, Bot, Wand2 } from "lucide-react";
 import { AIRecommendation, DebateResult } from "@/lib/api";
 
+export interface ManualTradeOptions {
+  stopLoss?: number;
+  takeProfit?: number;
+  deviation?: number;
+  orderType: "market" | "limit" | "stop";
+  triggerPrice?: number;
+}
+
 const ACTION_STYLES: Record<string, string> = {
   BUY: "bg-success/15 text-success border-success/30",
   SELL: "bg-danger/15 text-danger border-danger/30",
@@ -44,13 +52,15 @@ export default function RecommendationCard({
   executing: boolean;
   onExecuteAi: () => void;
   tradeError: string | null;
-  onManualTrade: (side: "BUY" | "SELL", quantity: number, stopLoss?: number, takeProfit?: number, deviation?: number) => void;
+  onManualTrade: (side: "BUY" | "SELL", quantity: number, opts: ManualTradeOptions) => void;
 }) {
   const [manualQty,  setManualQty]  = useState("0.01");
   const [stopLoss,   setStopLoss]   = useState("");
   const [takeProfit, setTakeProfit] = useState("");
   const [deviation,  setDeviation]  = useState("");
   const [debateOpen, setDebateOpen] = useState(false);
+  const [orderType,   setOrderType]   = useState<"market" | "limit" | "stop">("market");
+  const [triggerPrice, setTriggerPrice] = useState("");
 
   // Auto-fill AI-suggested SL/TP whenever recommendation changes
   useEffect(() => {
@@ -224,6 +234,22 @@ export default function RecommendationCard({
       <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Manual Trade</p>
         <div className="space-y-3">
+          {/* Order type: market fills now, limit/stop wait for price to reach a trigger */}
+          <div className="flex rounded-lg border border-border bg-surface p-1 text-xs font-medium">
+            {(["market", "limit", "stop"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setOrderType(t)}
+                className={clsx(
+                  "flex-1 rounded-md py-1.5 capitalize transition-colors",
+                  orderType === t ? "bg-accent text-black" : "text-muted hover:text-foreground"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
           {/* Qty + side */}
           <div className="flex items-center gap-2">
             <div className="flex-1">
@@ -238,6 +264,17 @@ export default function RecommendationCard({
                 placeholder="0.01"
               />
             </div>
+            {orderType !== "market" && (
+              <div className="flex-1">
+                <label className="text-xs text-muted">Trigger price</label>
+                <input
+                  type="number" min="0" step="0.0001" value={triggerPrice}
+                  onChange={(e) => setTriggerPrice(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  placeholder={rec.price.toFixed(4)}
+                />
+              </div>
+            )}
           </div>
 
           {/* SL / TP / Deviation */}
@@ -289,16 +326,28 @@ export default function RecommendationCard({
           {/* Sell / Buy */}
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => onManualTrade("SELL", parseFloat(manualQty), parseFloat(stopLoss) || undefined, parseFloat(takeProfit) || undefined, parseFloat(deviation) || undefined)}
+              onClick={() => onManualTrade("SELL", parseFloat(manualQty), {
+                stopLoss: parseFloat(stopLoss) || undefined,
+                takeProfit: parseFloat(takeProfit) || undefined,
+                deviation: parseFloat(deviation) || undefined,
+                orderType,
+                triggerPrice: orderType !== "market" ? parseFloat(triggerPrice) || undefined : undefined,
+              })}
               className="rounded-xl border border-danger/30 bg-danger/10 py-3 text-sm font-bold text-danger hover:bg-danger/20 transition-colors"
             >
-              Sell
+              {orderType === "market" ? "Sell" : "Place Sell"}
             </button>
             <button
-              onClick={() => onManualTrade("BUY", parseFloat(manualQty), parseFloat(stopLoss) || undefined, parseFloat(takeProfit) || undefined, parseFloat(deviation) || undefined)}
+              onClick={() => onManualTrade("BUY", parseFloat(manualQty), {
+                stopLoss: parseFloat(stopLoss) || undefined,
+                takeProfit: parseFloat(takeProfit) || undefined,
+                deviation: parseFloat(deviation) || undefined,
+                orderType,
+                triggerPrice: orderType !== "market" ? parseFloat(triggerPrice) || undefined : undefined,
+              })}
               className="rounded-xl border border-success/30 bg-success/10 py-3 text-sm font-bold text-success hover:bg-success/20 transition-colors"
             >
-              Buy
+              {orderType === "market" ? "Buy" : "Place Buy"}
             </button>
           </div>
         </div>

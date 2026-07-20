@@ -15,7 +15,8 @@ from .agents import debate
 from .ai_config_service import get_ai_config
 from .database import SessionLocal
 from .market_data import SYMBOLS
-from .models import PendingTrade, Trade, TradingMode, User, UserRole
+from .models import NotificationType, PendingTrade, Trade, TradingMode, User, UserRole
+from .notifications_service import notify
 from .trade_engine import TradeError, TradeSkipped, place_trade, size_ai_trade
 
 logger = logging.getLogger("autopilot")
@@ -116,6 +117,11 @@ def run_autopilot_once() -> tuple[int, int]:
                             )
                         )
                         db.commit()
+                        notify(
+                            db, user.id, NotificationType.pending_trade_proposed,
+                            f"AI proposes {side.value} {quantity:g} {symbol} "
+                            f"({rec.confidence:.0f}% confidence) — awaiting your approval",
+                        )
                         trades_proposed += 1
                         logger.info(
                             "autopilot: proposed %s %s %.4f %s (confidence %.1f, risk %s)",
@@ -143,6 +149,11 @@ def run_autopilot_once() -> tuple[int, int]:
                         risk_level=rec.risk_level,
                         reason="; ".join(rec.reasons[:3]),
                         debate_transcript=result.model_dump_json(),
+                    )
+                    notify(
+                        db, user.id, NotificationType.autopilot_trade,
+                        f"Autopilot executed {side.value} {quantity:g} {symbol} "
+                        f"({rec.confidence:.0f}% confidence)",
                     )
                     trades_placed += 1
                     logger.info(

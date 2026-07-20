@@ -41,6 +41,10 @@ def place_trade(
     risk_level: str | None = None,
     reason: str | None = None,
     debate_transcript: str | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    deviation: float | None = None,
+    reference_price: float | None = None,
 ) -> Trade:
     if user.role == UserRole.admin:
         raise TradeError("Admin accounts are for platform management and cannot trade")
@@ -50,6 +54,22 @@ def place_trade(
         raise TradeError("Quantity must be positive")
 
     price = market_store.get_last_price(symbol)
+
+    # Deviation = max allowed slippage between the price the user last saw
+    # (reference_price, sent by the frontend at click time) and the price
+    # this fills at. Mirrors MT5's "Deviation" field on a market order.
+    if deviation is not None and reference_price is not None:
+        if abs(price - reference_price) > deviation:
+            raise TradeError(
+                f"Price moved beyond your {deviation} deviation tolerance "
+                f"(quoted {reference_price}, now {price}) — trade rejected"
+            )
+
+    if side == TradeSide.buy and stop_loss is not None and stop_loss >= price:
+        raise TradeError("Stop loss must be below the current price for a BUY")
+    if side == TradeSide.buy and take_profit is not None and take_profit <= price:
+        raise TradeError("Take profit must be above the current price for a BUY")
+
     position = (
         db.query(Position)
         .filter(Position.user_id == user.id, Position.symbol == symbol)
@@ -68,9 +88,20 @@ def place_trade(
                 position.avg_entry_price * position.quantity + price * quantity
             ) / total_qty
             position.quantity = total_qty
+            # A fresh SL/TP on an add-to-position order replaces the old one —
+            # there's only one stop/target per symbol in this simplified model.
+            if stop_loss is not None:
+                position.stop_loss = stop_loss
+            if take_profit is not None:
+                position.take_profit = take_profit
         else:
             position = Position(
-                user_id=user.id, symbol=symbol, quantity=quantity, avg_entry_price=price
+                user_id=user.id,
+                symbol=symbol,
+                quantity=quantity,
+                avg_entry_price=price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
             )
             db.add(position)
     else:  # SELL
@@ -93,6 +124,9 @@ def place_trade(
         risk_level=risk_level,
         reason=reason,
         source=source,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        deviation=deviation,
         debate_transcript=debate_transcript,
     )
     db.add(trade)

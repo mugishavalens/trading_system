@@ -11,6 +11,7 @@ import {
   Candle,
   DebateResult,
   NewsItem,
+  Order,
   PendingTrade,
   Portfolio,
   SymbolInfo,
@@ -20,9 +21,11 @@ import { useAuth } from "@/lib/auth-context";
 import StatCard from "@/components/StatCard";
 import SymbolTabs from "@/components/SymbolTabs";
 import PriceChart from "@/components/PriceChart";
-import RecommendationCard from "@/components/RecommendationCard";
+import RecommendationCard, { ManualTradeOptions } from "@/components/RecommendationCard";
 import PositionsTable from "@/components/PositionsTable";
 import TradeHistoryTable from "@/components/TradeHistoryTable";
+import OrdersTable from "@/components/OrdersTable";
+import PriceAlerts from "@/components/PriceAlerts";
 import PaymentSection from "@/components/PaymentSection";
 
 const POLL_MS = 6000;
@@ -68,9 +71,12 @@ function DashboardContent() {
   const [pending, setPending] = useState<PendingTrade[]>([]);
   const [pendingBusyId, setPendingBusyId] = useState<number | null>(null);
   const [pendingErrors, setPendingErrors] = useState<Record<number, string>>({});
+  const [pendingQtyOverrides, setPendingQtyOverrides] = useState<Record<number, string>>({});
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [chartExpanded, setChartExpanded] = useState(false);
+
+  const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,6 +116,11 @@ function DashboardContent() {
     setPending(await api.pendingTrades(token));
   }, [token]);
 
+  const refreshOrders = useCallback(async () => {
+    if (!token) return;
+    setOrders(await api.listOrders(token));
+  }, [token]);
+
   useEffect(() => {
     refreshMarket();
     const id = setInterval(refreshMarket, POLL_MS);
@@ -142,6 +153,11 @@ function DashboardContent() {
 
   useEffect(() => {
     refreshAccount();
+    // Positions can now close themselves (stop-loss/take-profit) and orders can
+    // fill in the background via the monitor loop, not just from user actions —
+    // needs a poll, not just a refresh-on-demand, to show up live.
+    const id = setInterval(refreshAccount, POLL_MS);
+    return () => clearInterval(id);
   }, [refreshAccount]);
 
   useEffect(() => {
@@ -151,13 +167,25 @@ function DashboardContent() {
     return () => clearInterval(id);
   }, [refreshPending, user?.trading_mode]);
 
-  async function handleApprovePending(id: number) {
+  useEffect(() => {
+    refreshOrders();
+    const id = setInterval(refreshOrders, POLL_MS);
+    return () => clearInterval(id);
+  }, [refreshOrders]);
+
+  async function handleCancelOrder(id: number) {
+    if (!token) return;
+    await api.cancelOrder(token, id);
+    await refreshOrders();
+  }
+
+  async function handleApprovePending(id: number, quantity?: number) {
     if (!token) return;
     setPendingBusyId(id);
     // Clear any previous error for this trade
     setPendingErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
     try {
-      await api.approvePendingTrade(token, id);
+      await api.approvePendingTrade(token, id, quantity);
       await Promise.all([refreshPending(), refreshAccount(), refreshUser()]);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Failed to approve trade.";
@@ -225,13 +253,29 @@ function DashboardContent() {
     }
   }
 
-  async function handleManualTrade(side: "BUY" | "SELL", quantity: number, stopLoss?: number, takeProfit?: number, deviation?: number) {
+  async function handleManualTrade(side: "BUY" | "SELL", quantity: number, opts: ManualTradeOptions) {
     if (!token || !quantity || quantity <= 0) return;
     setExecuting(true);
     setTradeError(null);
     try {
-      await api.executeTrade(token, { symbol: selected, side, quantity, stop_loss: stopLoss, take_profit: takeProfit, deviation });
-      await Promise.all([refreshAccount(), refreshUser()]);
+      if (opts.orderType === "market") {
+        await api.executeTrade(token, {
+          symbol: selected, side, quantity,
+          stop_loss: opts.stopLoss, take_profit: opts.takeProfit, deviation: opts.deviation,
+          reference_price: recommendation?.price,
+        });
+        await Promise.all([refreshAccount(), refreshUser()]);
+      } else {
+        if (!opts.triggerPrice) {
+          setTradeError("Set a trigger price for a limit/stop order.");
+          return;
+        }
+        await api.createOrder(token, {
+          symbol: selected, side, order_type: opts.orderType, trigger_price: opts.triggerPrice, quantity,
+          stop_loss: opts.stopLoss, take_profit: opts.takeProfit, deviation: opts.deviation,
+        });
+        await refreshOrders();
+      }
     } catch (err) {
       setTradeError(err instanceof ApiError ? err.message : "Trade failed.");
     } finally {
@@ -277,15 +321,28 @@ function DashboardContent() {
                       <span className={p.side === "BUY" ? "text-success" : "text-danger"}>
                         {p.side}
                       </span>{" "}
-                      <span className="font-medium">{p.symbol}</span> · qty{" "}
-                      {p.quantity.toFixed(4)} · {p.confidence.toFixed(0)}% confidence ·{" "}
-                      {p.risk_level} risk
+                      <span className="font-medium">{p.symbol}</span> ·{" "}
+                      {p.confidence.toFixed(0)}% confidence · {p.risk_level} risk
                     </p>
                     <p className="mt-1 text-xs text-muted">{p.reason}</p>
+                    <label className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+                      Qty
+                      <input
+                        type="number" min="0" step="0.0001"
+                        value={pendingQtyOverrides[p.id] ?? p.quantity}
+                        onChange={(e) =>
+                          setPendingQtyOverrides((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        className="w-24 rounded border border-border bg-surface px-1.5 py-0.5 text-xs outline-none focus:border-accent"
+                      />
+                      <span className="text-muted/70">(AI proposed {p.quantity.toFixed(4)})</span>
+                    </label>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleApprovePending(p.id)}
+                      onClick={() =>
+                        handleApprovePending(p.id, parseFloat(pendingQtyOverrides[p.id] ?? String(p.quantity)))
+                      }
                       disabled={pendingBusyId === p.id}
                       className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-black hover:bg-accent-2 disabled:opacity-50 transition-colors"
                     >
@@ -394,6 +451,15 @@ function DashboardContent() {
             </div>
             <PositionsTable positions={portfolio?.positions ?? []} />
           </div>
+
+          <div className="glass rounded-2xl">
+            <div className="border-b border-border px-5 py-3 text-sm font-medium">
+              Open Orders
+            </div>
+            <OrdersTable orders={orders} onCancel={handleCancelOrder} />
+          </div>
+
+          <PriceAlerts defaultSymbol={selected} />
 
           <div className="glass rounded-2xl">
             <div className="border-b border-border px-5 py-3 text-sm font-medium">

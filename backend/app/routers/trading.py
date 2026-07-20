@@ -7,7 +7,12 @@ from ..agents import debate
 from ..ai_engine import build_recommendation
 from ..database import get_db
 from ..models import PendingTrade, PendingTradeStatus, Trade, User
-from ..schemas import ExecuteTradeRequest, PendingTradeResponse, TradeResponse
+from ..schemas import (
+    ApprovePendingTradeRequest,
+    ExecuteTradeRequest,
+    PendingTradeResponse,
+    TradeResponse,
+)
 from ..security import get_current_user
 from ..trade_engine import TradeError, TradeSkipped, place_trade, size_ai_trade
 
@@ -32,6 +37,10 @@ def execute_trade(
             confidence=rec.confidence,
             risk_level=rec.risk_level,
             reason="; ".join(rec.reasons[:3]),
+            stop_loss=payload.stop_loss,
+            take_profit=payload.take_profit,
+            deviation=payload.deviation,
+            reference_price=payload.reference_price,
         )
     except TradeError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
@@ -136,17 +145,21 @@ def list_pending_trades(
 @router.post("/pending/{pending_id}/approve", response_model=TradeResponse)
 def approve_pending_trade(
     pending_id: int,
+    payload: ApprovePendingTradeRequest = ApprovePendingTradeRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     pending = _get_pending_trade(db, current_user, pending_id)
+    # The one piece of "AI + human" blending: approve the AI's proposal as-is,
+    # or override the size it picked before executing.
+    quantity = payload.quantity if payload.quantity is not None else pending.quantity
     try:
         trade = place_trade(
             db,
             current_user,
             pending.symbol,
             pending.side,
-            pending.quantity,
+            quantity,
             source="assisted",
             confidence=pending.confidence,
             risk_level=pending.risk_level,

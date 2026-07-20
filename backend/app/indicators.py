@@ -53,6 +53,27 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     )
 
 
+def compute_series(df: pd.DataFrame) -> dict:
+    """Full-length indicator series (not just the latest value) for chart overlays.
+
+    Caller supplies "time" itself from the original candle dicts — df["time"]
+    has already been round-tripped through pd.to_datetime by to_dataframe()
+    and would lose the original ISO string formatting the frontend expects."""
+    close = df["close"]
+    macd_line, signal_line = macd(close)
+    upper, lower = bollinger_bands(close)
+    return {
+        "ema_20": ema(close, 20).tolist(),
+        "ema_50": ema(close, 50).tolist(),
+        "sma_20": sma(close, 20).tolist(),
+        "bollinger_upper": upper.tolist(),
+        "bollinger_lower": lower.tolist(),
+        "rsi": rsi(close).tolist(),
+        "macd": macd_line.tolist(),
+        "macd_signal": signal_line.tolist(),
+    }
+
+
 def compute_all(df: pd.DataFrame) -> dict:
     close = df["close"]
     macd_line, signal_line = macd(close)

@@ -42,6 +42,37 @@ class PendingTradeStatus(str, enum.Enum):
     expired = "expired"
 
 
+class OrderType(str, enum.Enum):
+    limit = "limit"
+    stop = "stop"
+
+
+class OrderStatus(str, enum.Enum):
+    open = "open"
+    filled = "filled"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
+class AlertCondition(str, enum.Enum):
+    above = "above"
+    below = "below"
+
+
+class AlertStatus(str, enum.Enum):
+    active = "active"
+    triggered = "triggered"
+    cancelled = "cancelled"
+
+
+class NotificationType(str, enum.Enum):
+    order_filled = "order_filled"
+    sl_tp_triggered = "sl_tp_triggered"
+    price_alert = "price_alert"
+    pending_trade_proposed = "pending_trade_proposed"
+    autopilot_trade = "autopilot_trade"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -80,6 +111,18 @@ class User(Base):
     pending_trades: Mapped[list["PendingTrade"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    pending_orders: Mapped[list["PendingOrder"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    watchlist_items: Mapped[list["WatchlistItem"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    price_alerts: Mapped[list["PriceAlert"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Position(Base):
@@ -90,6 +133,8 @@ class Position(Base):
     symbol: Mapped[str] = mapped_column(String(20), index=True)
     quantity: Mapped[float] = mapped_column(Float)
     avg_entry_price: Mapped[float] = mapped_column(Float)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
     opened_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
@@ -111,6 +156,9 @@ class Trade(Base):
     risk_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="manual")  # manual | ai_auto
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    deviation: Mapped[float | None] = mapped_column(Float, nullable=True)
     debate_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
@@ -181,6 +229,78 @@ class PendingTrade(Base):
     decided_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="pending_trades")
+
+
+class PendingOrder(Base):
+    """A real limit/stop order sitting in the (in-memory-checked) book until
+    price touches trigger_price — distinct from PendingTrade, which is an AI
+    proposal awaiting human approval, not a price-triggered order."""
+
+    __tablename__ = "pending_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    side: Mapped[TradeSide] = mapped_column(Enum(TradeSide))
+    order_type: Mapped[OrderType] = mapped_column(Enum(OrderType))
+    trigger_price: Mapped[float] = mapped_column(Float)
+    quantity: Mapped[float] = mapped_column(Float)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    deviation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.open)
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, index=True
+    )
+    filled_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="pending_orders")
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow
+    )
+
+    user: Mapped["User"] = relationship(back_populates="watchlist_items")
+
+
+class PriceAlert(Base):
+    __tablename__ = "price_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    condition: Mapped[AlertCondition] = mapped_column(Enum(AlertCondition))
+    target_price: Mapped[float] = mapped_column(Float)
+    status: Mapped[AlertStatus] = mapped_column(Enum(AlertStatus), default=AlertStatus.active)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow
+    )
+    triggered_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="price_alerts")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType))
+    message: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, index=True
+    )
+
+    user: Mapped["User"] = relationship(back_populates="notifications")
 
 
 class ContactMessage(Base):

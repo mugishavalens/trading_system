@@ -66,6 +66,8 @@ def get_portfolio(
                 current_price=current_price,
                 unrealized_pnl=round(unrealized_pnl, 2),
                 unrealized_pnl_pct=round(unrealized_pnl_pct, 2),
+                stop_loss=pos.stop_loss,
+                take_profit=pos.take_profit,
             )
         )
 

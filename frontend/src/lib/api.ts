@@ -131,7 +131,15 @@ export const api = {
 
   executeTrade: (
     token: string,
-    payload: { symbol: string; side: "BUY" | "SELL"; quantity: number; stop_loss?: number; take_profit?: number; deviation?: number }
+    payload: {
+      symbol: string;
+      side: "BUY" | "SELL";
+      quantity: number;
+      stop_loss?: number;
+      take_profit?: number;
+      deviation?: number;
+      reference_price?: number;
+    }
   ) =>
     request<Trade>("/api/trading/execute", {
       method: "POST",
@@ -144,6 +152,73 @@ export const api = {
       method: "POST",
       token,
     }),
+
+  indicatorSeries: (symbol: string, limit = 120) =>
+    request<IndicatorSeries>(
+      `/api/market/indicators/${encodeURIComponent(symbol)}?limit=${limit}`
+    ),
+
+  // ---- Orders (limit/stop) ----
+  createOrder: (
+    token: string,
+    payload: {
+      symbol: string;
+      side: "BUY" | "SELL";
+      order_type: "limit" | "stop";
+      trigger_price: number;
+      quantity: number;
+      stop_loss?: number;
+      take_profit?: number;
+      deviation?: number;
+      expires_in_hours?: number;
+    }
+  ) =>
+    request<Order>("/api/trading/orders", { method: "POST", token, body: JSON.stringify(payload) }),
+
+  listOrders: (token: string) => request<Order[]>("/api/trading/orders", { token }),
+
+  cancelOrder: (token: string, id: number) =>
+    request<Order>(`/api/trading/orders/${id}`, { method: "DELETE", token }),
+
+  // ---- Watchlist ----
+  watchlist: (token: string) => request<WatchlistItem[]>("/api/watchlist", { token }),
+
+  addToWatchlist: (token: string, symbol: string) =>
+    request<WatchlistItem>("/api/watchlist", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ symbol }),
+    }),
+
+  removeFromWatchlist: (token: string, symbol: string) =>
+    request<{ status: string }>(`/api/watchlist/${encodeURIComponent(symbol)}`, {
+      method: "DELETE",
+      token,
+    }),
+
+  // ---- Price alerts ----
+  alerts: (token: string) => request<PriceAlertItem[]>("/api/alerts", { token }),
+
+  createAlert: (
+    token: string,
+    payload: { symbol: string; condition: "above" | "below"; target_price: number }
+  ) => request<PriceAlertItem>("/api/alerts", { method: "POST", token, body: JSON.stringify(payload) }),
+
+  cancelAlert: (token: string, id: number) =>
+    request<{ status: string }>(`/api/alerts/${id}`, { method: "DELETE", token }),
+
+  // ---- Notifications ----
+  notifications: (token: string, limit = 50) =>
+    request<NotificationItem[]>(`/api/notifications?limit=${limit}`, { token }),
+
+  unreadNotificationCount: (token: string) =>
+    request<{ count: number }>("/api/notifications/unread-count", { token }),
+
+  markNotificationRead: (token: string, id: number) =>
+    request<NotificationItem>(`/api/notifications/${id}/read`, { method: "POST", token }),
+
+  markAllNotificationsRead: (token: string) =>
+    request<{ status: string }>("/api/notifications/read-all", { method: "POST", token }),
 
   tradeHistory: (
     token: string,
@@ -161,8 +236,12 @@ export const api = {
   pendingTrades: (token: string) =>
     request<PendingTrade[]>("/api/trading/pending", { token }),
 
-  approvePendingTrade: (token: string, id: number) =>
-    request<Trade>(`/api/trading/pending/${id}/approve`, { method: "POST", token }),
+  approvePendingTrade: (token: string, id: number, quantity?: number) =>
+    request<Trade>(`/api/trading/pending/${id}/approve`, {
+      method: "POST",
+      token,
+      body: JSON.stringify(quantity !== undefined ? { quantity } : {}),
+    }),
 
   rejectPendingTrade: (token: string, id: number) =>
     request<PendingTrade>(`/api/trading/pending/${id}/reject`, { method: "POST", token }),
@@ -383,6 +462,9 @@ export interface Trade {
   risk_level: string | null;
   reason: string | null;
   source: string;
+  stop_loss: number | null;
+  take_profit: number | null;
+  deviation: number | null;
   executed_at: string;
 }
 
@@ -393,6 +475,64 @@ export interface Position {
   current_price: number;
   unrealized_pnl: number;
   unrealized_pnl_pct: number;
+  stop_loss: number | null;
+  take_profit: number | null;
+}
+
+export interface IndicatorSeries {
+  time: string[];
+  ema_20: number[];
+  ema_50: number[];
+  sma_20: number[];
+  bollinger_upper: number[];
+  bollinger_lower: number[];
+  rsi: number[];
+  macd: number[];
+  macd_signal: number[];
+}
+
+export interface Order {
+  id: number;
+  symbol: string;
+  side: "BUY" | "SELL";
+  order_type: "limit" | "stop";
+  trigger_price: number;
+  quantity: number;
+  stop_loss: number | null;
+  take_profit: number | null;
+  deviation: number | null;
+  status: "open" | "filled" | "cancelled" | "expired";
+  expires_at: string | null;
+  created_at: string;
+  filled_at: string | null;
+}
+
+export interface WatchlistItem {
+  symbol: string;
+  created_at: string;
+}
+
+export interface PriceAlertItem {
+  id: number;
+  symbol: string;
+  condition: "above" | "below";
+  target_price: number;
+  status: "active" | "triggered" | "cancelled";
+  created_at: string;
+  triggered_at: string | null;
+}
+
+export interface NotificationItem {
+  id: number;
+  type:
+    | "order_filled"
+    | "sl_tp_triggered"
+    | "price_alert"
+    | "pending_trade_proposed"
+    | "autopilot_trade";
+  message: string;
+  is_read: boolean;
+  created_at: string;
 }
 
 export interface Portfolio {

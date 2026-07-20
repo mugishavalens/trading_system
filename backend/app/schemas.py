@@ -2,7 +2,18 @@ import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .models import ExperienceLevel, RiskProfile, TradeSide, TradingMode, UserRole
+from .models import (
+    AlertCondition,
+    AlertStatus,
+    ExperienceLevel,
+    NotificationType,
+    OrderStatus,
+    OrderType,
+    RiskProfile,
+    TradeSide,
+    TradingMode,
+    UserRole,
+)
 
 
 # ---- Auth ----
@@ -162,6 +173,11 @@ class ExecuteTradeRequest(BaseModel):
     side: TradeSide
     quantity: float = Field(gt=0)
     source: str = "manual"
+    stop_loss: float | None = Field(default=None, gt=0)
+    take_profit: float | None = Field(default=None, gt=0)
+    deviation: float | None = Field(default=None, ge=0)
+    # Price the frontend last displayed to the user, used to enforce `deviation`.
+    reference_price: float | None = Field(default=None, gt=0)
 
 
 class TradeResponse(BaseModel):
@@ -175,6 +191,9 @@ class TradeResponse(BaseModel):
     risk_level: str | None
     reason: str | None
     source: str
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    deviation: float | None = None
     executed_at: datetime.datetime
 
     class Config:
@@ -188,6 +207,8 @@ class PositionResponse(BaseModel):
     current_price: float
     unrealized_pnl: float
     unrealized_pnl_pct: float
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 class PortfolioResponse(BaseModel):
@@ -222,6 +243,107 @@ class PendingTradeResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ApprovePendingTradeRequest(BaseModel):
+    # Lets the user adjust size before approving instead of executing the
+    # AI's proposed quantity verbatim — the one piece of "AI + human" blending.
+    quantity: float | None = Field(default=None, gt=0)
+
+
+# ---- Pending (limit/stop) orders ----
+
+class CreateOrderRequest(BaseModel):
+    symbol: str
+    side: TradeSide
+    order_type: OrderType
+    trigger_price: float = Field(gt=0)
+    quantity: float = Field(gt=0)
+    stop_loss: float | None = Field(default=None, gt=0)
+    take_profit: float | None = Field(default=None, gt=0)
+    deviation: float | None = Field(default=None, ge=0)
+    expires_in_hours: float | None = Field(default=None, gt=0, le=24 * 30)
+
+
+class OrderResponse(BaseModel):
+    id: int
+    symbol: str
+    side: TradeSide
+    order_type: OrderType
+    trigger_price: float
+    quantity: float
+    stop_loss: float | None
+    take_profit: float | None
+    deviation: float | None
+    status: OrderStatus
+    expires_at: datetime.datetime | None
+    created_at: datetime.datetime
+    filled_at: datetime.datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Watchlist ----
+
+class WatchlistAddRequest(BaseModel):
+    symbol: str
+
+
+class WatchlistItemResponse(BaseModel):
+    symbol: str
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Price alerts ----
+
+class CreateAlertRequest(BaseModel):
+    symbol: str
+    condition: AlertCondition
+    target_price: float = Field(gt=0)
+
+
+class AlertResponse(BaseModel):
+    id: int
+    symbol: str
+    condition: AlertCondition
+    target_price: float
+    status: AlertStatus
+    created_at: datetime.datetime
+    triggered_at: datetime.datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Notifications ----
+
+class NotificationResponse(BaseModel):
+    id: int
+    type: NotificationType
+    message: str
+    is_read: bool
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Chart indicator series (for overlays) ----
+
+class IndicatorSeriesResponse(BaseModel):
+    time: list[str]
+    ema_20: list[float]
+    ema_50: list[float]
+    sma_20: list[float]
+    bollinger_upper: list[float]
+    bollinger_lower: list[float]
+    rsi: list[float]
+    macd: list[float]
+    macd_signal: list[float]
 
 
 class ExposureItem(BaseModel):

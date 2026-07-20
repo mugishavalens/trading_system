@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LogOut, Sun, Moon, Home } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function Topbar() {
   const { user, logout } = useAuth();
@@ -28,6 +29,9 @@ export default function Topbar() {
             {user ? user.cash_balance.toLocaleString(undefined, { style: "currency", currency: "USD" }) : "—"}
           </p>
         </div>
+
+        {/* Notifications */}
+        <NotificationBell />
 
         {/* Theme toggle */}
         <button onClick={toggleTheme} aria-label="Toggle theme" suppressHydrationWarning

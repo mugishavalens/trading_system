@@ -11,7 +11,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .autopilot import autopilot_loop
 from .config import settings
-from .routers import admin, ai, assistant, auth, contact, market, news, portfolio, trading
+from .monitor import monitor_loop
+from .routers import (
+    admin,
+    ai,
+    alerts,
+    assistant,
+    auth,
+    contact,
+    market,
+    news,
+    notifications,
+    orders,
+    portfolio,
+    trading,
+    watchlist,
+)
 from .seed import seed_admin_user, seed_ai_config
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -43,7 +58,8 @@ async def lifespan(app: FastAPI):
         seed_ai_config()
         _log("[startup] ai config seeded")
         task = asyncio.create_task(autopilot_loop())
-        _log("[startup] autopilot task started, startup complete")
+        monitor_task = asyncio.create_task(monitor_loop())
+        _log("[startup] autopilot + monitor tasks started, startup complete")
     except Exception:
         _log("[startup] FAILED:\n" + traceback.format_exc())
         raise
@@ -51,6 +67,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         task.cancel()
+        monitor_task.cancel()
 
 
 app = FastAPI(title="AI Trading Mentor (Demo)", version="0.1.0", lifespan=lifespan)
@@ -67,6 +84,10 @@ app.include_router(auth.router)
 app.include_router(market.router)
 app.include_router(ai.router)
 app.include_router(trading.router)
+app.include_router(orders.router)
+app.include_router(watchlist.router)
+app.include_router(alerts.router)
+app.include_router(notifications.router)
 app.include_router(portfolio.router)
 app.include_router(assistant.router)
 app.include_router(news.router)

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import clsx from "clsx";
-import { ChevronDown, TrendingUp, TrendingDown, Minus, Search, X } from "lucide-react";
+import { ChevronDown, TrendingUp, TrendingDown, Minus, Search, Star, X } from "lucide-react";
 import {
   createChart, CandlestickSeries, LineSeries,
   ColorType, UTCTimestamp, LineStyle,
@@ -11,15 +11,8 @@ import { api, AIRecommendation, Candle, SymbolInfo } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { chartColors } from "@/lib/chartTheme";
 import { useTheme } from "@/lib/theme-context";
-
-/* ─── Asset class groups ────────────────────────────────────────────────── */
-const GROUPS = [
-  { key: "crypto",    label: "Crypto",      accent: "#f59e0b" },
-  { key: "forex",     label: "Forex",       accent: "#38bdf8" },
-  { key: "stock",     label: "Stocks",      accent: "#22c55e" },
-  { key: "index",     label: "Indices",     accent: "#a78bfa" },
-  { key: "commodity", label: "Commodities", accent: "#fb923c" },
-];
+import { ASSET_CLASS_GROUPS as GROUPS } from "@/lib/assetClasses";
+import { useWatchlist } from "@/lib/useWatchlist";
 
 /* Short badge labels for well-known tickers */
 const BADGE_LABELS: Record<string, string> = {
@@ -252,11 +245,15 @@ function SymbolRow({
   rec,
   expanded,
   onToggle,
+  isWatched,
+  onToggleWatch,
 }: {
   symbol: SymbolInfo;
   rec?: AIRecommendation;
   expanded: boolean;
   onToggle: () => void;
+  isWatched: boolean;
+  onToggleWatch: () => void;
 }) {
   const positive  = symbol.change_pct_24h >= 0;
   const SentIcon  = rec ? SENTIMENT[rec.action]?.icon : null;
@@ -266,41 +263,48 @@ function SymbolRow({
 
   return (
     <div className="border-b border-border last:border-0">
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-2 transition-colors text-sm"
-      >
-        {/* Symbol badge */}
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-          style={{ backgroundColor: `${badgeColor}20`, color: badgeColor }}
+      <div className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-2 transition-colors text-sm">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleWatch(); }}
+          title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+          className={clsx("shrink-0 transition-colors", isWatched ? "text-accent" : "text-muted/40 hover:text-muted")}
         >
-          {badge}
-        </div>
+          <Star size={13} className={isWatched ? "fill-current" : ""} />
+        </button>
 
-        {/* Symbol name */}
-        <div className="flex-1 text-left min-w-0">
-          <p className="font-semibold truncate">{symbol.symbol}</p>
-          <p className="text-xs text-muted truncate">{symbol.name}</p>
-        </div>
+        <button onClick={onToggle} className="flex flex-1 items-center gap-3 text-left min-w-0">
+          {/* Symbol badge */}
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+            style={{ backgroundColor: `${badgeColor}20`, color: badgeColor }}
+          >
+            {badge}
+          </div>
 
-        {/* Price */}
-        <div className="text-right shrink-0">
-          <p className="font-semibold tabular-nums">
-            {symbol.last_price < 10
-              ? symbol.last_price.toFixed(4)
-              : symbol.last_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </p>
-          <p className={clsx("text-xs tabular-nums font-medium", positive ? "text-success" : "text-danger")}>
-            {positive ? "▲" : "▼"} {Math.abs(symbol.change_pct_24h).toFixed(2)}%
-          </p>
-        </div>
+          {/* Symbol name */}
+          <div className="flex-1 text-left min-w-0">
+            <p className="font-semibold truncate">{symbol.symbol}</p>
+            <p className="text-xs text-muted truncate">{symbol.name}</p>
+          </div>
 
-        {/* AI signal */}
-        {SentIcon && (
-          <SentIcon size={14} className={clsx("shrink-0", sentCls)} />
-        )}
-      </button>
+          {/* Price */}
+          <div className="text-right shrink-0">
+            <p className="font-semibold tabular-nums">
+              {symbol.last_price < 10
+                ? symbol.last_price.toFixed(4)
+                : symbol.last_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </p>
+            <p className={clsx("text-xs tabular-nums font-medium", positive ? "text-success" : "text-danger")}>
+              {positive ? "▲" : "▼"} {Math.abs(symbol.change_pct_24h).toFixed(2)}%
+            </p>
+          </div>
+
+          {/* AI signal */}
+          {SentIcon && (
+            <SentIcon size={14} className={clsx("shrink-0", sentCls)} />
+          )}
+        </button>
+      </div>
 
       {expanded && (
         <InlineChart symbol={symbol.symbol} onClose={onToggle} />
@@ -317,6 +321,8 @@ function GroupSection({
   recs,
   expandedSymbol,
   onToggle,
+  watchlist,
+  onToggleWatch,
 }: {
   label: string;
   accent: string;
@@ -324,6 +330,8 @@ function GroupSection({
   recs: Record<string, AIRecommendation>;
   expandedSymbol: string | null;
   onToggle: (sym: string) => void;
+  watchlist: Set<string>;
+  onToggleWatch: (sym: string) => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -360,6 +368,8 @@ function GroupSection({
               rec={recs[s.symbol]}
               expanded={expandedSymbol === s.symbol}
               onToggle={() => onToggle(s.symbol)}
+              isWatched={watchlist.has(s.symbol)}
+              onToggleWatch={() => onToggleWatch(s.symbol)}
             />
           ))}
         </div>
@@ -375,6 +385,7 @@ export default function MarketsPage() {
   const [recs,       setRecs]       = useState<Record<string, AIRecommendation>>({});
   const [search,     setSearch]     = useState("");
   const [expanded,   setExpanded]   = useState<string | null>(null);
+  const { watchlist, toggleWatchlist } = useWatchlist();
 
   useEffect(() => {
     let cancelled = false;
@@ -437,6 +448,19 @@ export default function MarketsPage() {
           <div className="shrink-0 w-5" />
         </div>
 
+        {watchlist.size > 0 && (
+          <GroupSection
+            label="Watchlist"
+            accent="#facc15"
+            symbols={filtered.filter((s) => watchlist.has(s.symbol))}
+            recs={recs}
+            expandedSymbol={expanded}
+            onToggle={handleToggle}
+            watchlist={watchlist}
+            onToggleWatch={toggleWatchlist}
+          />
+        )}
+
         {GROUPS.map(({ key, label, accent }) => (
           <GroupSection
             key={key}
@@ -446,6 +470,8 @@ export default function MarketsPage() {
             recs={recs}
             expandedSymbol={expanded}
             onToggle={handleToggle}
+            watchlist={watchlist}
+            onToggleWatch={toggleWatchlist}
           />
         ))}
 

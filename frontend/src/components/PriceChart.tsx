@@ -24,6 +24,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Activity,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -103,6 +104,52 @@ function aggregateCandles(candles: Candle[], minutes: number): Candle[] {
   return out;
 }
 
+/* ─── Indicator math (computed client-side over the displayed timeframe,
+   so overlays stay correct across M1/M5/.../D1 instead of always reflecting
+   the raw 1-minute series the backend's /api/market/indicators returns) ── */
+type IndicatorKey = "ema20" | "ema50" | "bollinger";
+
+const INDICATOR_DEFS: { key: IndicatorKey; label: string; color: string }[] = [
+  { key: "ema20",     label: "EMA 20",     color: "#38bdf8" },
+  { key: "ema50",     label: "EMA 50",     color: "#f59e0b" },
+  { key: "bollinger", label: "Bollinger",  color: "#a78bfa" },
+];
+
+function emaSeries(values: number[], period: number): number[] {
+  if (values.length === 0) return [];
+  const k = 2 / (period + 1);
+  const out: number[] = [values[0]];
+  for (let i = 1; i < values.length; i++) out.push(values[i] * k + out[i - 1] * (1 - k));
+  return out;
+}
+
+function smaSeries(values: number[], period: number): number[] {
+  const out: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) {
+    sum += values[i];
+    if (i >= period) sum -= values[i - period];
+    out.push(sum / Math.min(i + 1, period));
+  }
+  return out;
+}
+
+function bollingerSeries(values: number[], period = 20, numStd = 2) {
+  const mid = smaSeries(values, period);
+  const upper: number[] = [];
+  const lower: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    const start = Math.max(0, i - period + 1);
+    const window = values.slice(start, i + 1);
+    const mean = mid[i];
+    const variance = window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length;
+    const std = Math.sqrt(variance);
+    upper.push(mean + numStd * std);
+    lower.push(mean - numStd * std);
+  }
+  return { upper, lower };
+}
+
 /* ─── Helper: add a styled line series ──────────────────────────────────── */
 function addLineSeries(
   chart: IChartApi,
@@ -146,6 +193,9 @@ export default function PriceChart({
   const mouseDownRef      = useRef(false);
   const displayCandlesRef = useRef<Candle[]>([]);
   const drawToolRef       = useRef<DrawTool>("none");
+  const indicatorSeriesRef = useRef<Record<IndicatorKey, ISeriesApi<"Line">[]>>({
+    ema20: [], ema50: [], bollinger: [],
+  });
 
   const { theme } = useTheme();
   const [timeframe,       setTimeframe]       = useState<Timeframe>("M1");
@@ -154,6 +204,7 @@ export default function PriceChart({
   const [awaitingSecond,  setAwaitingSecond]  = useState(false);
   const [isDragging,      setIsDragging]      = useState(false);
   const [showDrawings,    setShowDrawings]    = useState(false);
+  const [activeIndicators, setActiveIndicators] = useState<Set<IndicatorKey>>(new Set());
 
   /* ── derived candles ── */
   const tf = TIMEFRAMES.find((t) => t.key === timeframe)!;
@@ -279,6 +330,56 @@ export default function PriceChart({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, timeframe]);
+
+  /* ── Indicator overlays (EMA20/EMA50/Bollinger), computed over the displayed timeframe ── */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    // Always start clean — the chart may have just been rebuilt (theme/timeframe/expanded change),
+    // which invalidates any series from a prior run.
+    (Object.keys(indicatorSeriesRef.current) as IndicatorKey[]).forEach((key) => {
+      indicatorSeriesRef.current[key].forEach((s) => { try { chart.removeSeries(s); } catch { /* gone with old chart */ } });
+      indicatorSeriesRef.current[key] = [];
+    });
+
+    if (activeIndicators.size === 0) return;
+
+    const tfDef = TIMEFRAMES.find((t) => t.key === timeframe)!;
+    const dc = aggregateCandles(candles, tfDef.minutes);
+    if (dc.length === 0) return;
+    const times = dc.map((c) => (new Date(c.time).getTime() / 1000) as UTCTimestamp);
+    const closes = dc.map((c) => c.close);
+
+    if (activeIndicators.has("ema20")) {
+      const s = addLineSeries(chart, { color: "#38bdf8", width: 1, style: LineStyle.Solid, title: "EMA20" });
+      s.setData(emaSeries(closes, 20).map((v, i) => ({ time: times[i], value: v })));
+      indicatorSeriesRef.current.ema20 = [s];
+    }
+    if (activeIndicators.has("ema50")) {
+      const s = addLineSeries(chart, { color: "#f59e0b", width: 1, style: LineStyle.Solid, title: "EMA50" });
+      s.setData(emaSeries(closes, 50).map((v, i) => ({ time: times[i], value: v })));
+      indicatorSeriesRef.current.ema50 = [s];
+    }
+    if (activeIndicators.has("bollinger")) {
+      const { upper, lower } = bollingerSeries(closes, 20, 2);
+      const sU = addLineSeries(chart, { color: "#a78bfa", width: 1, style: LineStyle.Dashed, title: "BB Upper" });
+      sU.setData(upper.map((v, i) => ({ time: times[i], value: v })));
+      const sL = addLineSeries(chart, { color: "#a78bfa", width: 1, style: LineStyle.Dashed, title: "BB Lower" });
+      sL.setData(lower.map((v, i) => ({ time: times[i], value: v })));
+      indicatorSeriesRef.current.bollinger = [sU, sL];
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, timeframe, theme, expanded, activeIndicators]);
+
+  function toggleIndicator(key: IndicatorKey) {
+    setActiveIndicators((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   /* ── Toggle drag-to-pan on the live chart whenever the active tool changes ── */
   useEffect(() => {
@@ -590,6 +691,27 @@ export default function PriceChart({
               <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Indicator overlays */}
+        <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1">
+          <Activity size={12} className="ml-1.5 text-muted" />
+          {INDICATOR_DEFS.map(({ key, label, color }) => {
+            const on = activeIndicators.has(key);
+            return (
+              <button
+                key={key}
+                onClick={() => toggleIndicator(key)}
+                title={`Toggle ${label} overlay`}
+                className={`h-7 rounded-lg px-2 text-xs font-medium transition-all ${
+                  on ? "text-black shadow-sm" : "text-muted hover:text-foreground"
+                }`}
+                style={on ? { backgroundColor: color } : {}}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Drawings list toggle */}
