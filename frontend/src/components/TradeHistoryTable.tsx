@@ -13,7 +13,16 @@ const SOURCE_LABEL: Record<string, string> = {
   stop_order: "Stop Order",
 };
 
-export default function TradeHistoryTable({ trades }: { trades: Trade[] }) {
+export default function TradeHistoryTable({
+  trades,
+  showFilters = true,
+}: {
+  trades: Trade[];
+  /** Pages that already have their own filter UI (e.g. the Portfolio page's
+   * server-side FilterBar) should pass false — otherwise a symbol/side/date
+   * filter shows up twice, each narrowing the same list differently. */
+  showFilters?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [side, setSide] = useState<"all" | "BUY" | "SELL">("all");
   const [source, setSource] = useState<string>("all");
@@ -25,7 +34,7 @@ export default function TradeHistoryTable({ trades }: { trades: Trade[] }) {
     [trades]
   );
 
-  const filtered = trades.filter((t) => {
+  const filtered = !showFilters ? trades : trades.filter((t) => {
     if (search && !t.symbol.toLowerCase().includes(search.toLowerCase())) return false;
     if (side !== "all" && t.side !== side) return false;
     if (source !== "all" && t.source !== source) return false;
@@ -51,55 +60,57 @@ export default function TradeHistoryTable({ trades }: { trades: Trade[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-        <div className="relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Symbol..."
-            className="w-32 rounded-lg border border-border bg-surface py-1.5 pl-7 pr-2 text-xs outline-none focus:border-accent"
-          />
-        </div>
-        <select
-          value={side}
-          onChange={(e) => setSide(e.target.value as "all" | "BUY" | "SELL")}
-          className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
-        >
-          <option value="all">All sides</option>
-          <option value="BUY">Buy</option>
-          <option value="SELL">Sell</option>
-        </select>
-        <select
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
-        >
-          <option value="all">All sources</option>
-          {sources.map((s) => (
-            <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>
-          ))}
-        </select>
-        <input
-          type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-          title="From date"
-          className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
-        />
-        <input
-          type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-          title="To date"
-          className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
-        />
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted hover:text-danger transition-colors"
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Symbol..."
+              className="w-32 rounded-lg border border-border bg-surface py-1.5 pl-7 pr-2 text-xs outline-none focus:border-accent"
+            />
+          </div>
+          <select
+            value={side}
+            onChange={(e) => setSide(e.target.value as "all" | "BUY" | "SELL")}
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
           >
-            <X size={11} /> Clear
-          </button>
-        )}
-        <span className="ml-auto text-xs text-muted">{filtered.length} of {trades.length}</span>
-      </div>
+            <option value="all">All sides</option>
+            <option value="BUY">Buy</option>
+            <option value="SELL">Sell</option>
+          </select>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
+          >
+            <option value="all">All sources</option>
+            {sources.map((s) => (
+              <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>
+            ))}
+          </select>
+          <input
+            type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            title="From date"
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
+          />
+          <input
+            type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            title="To date"
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
+          />
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted hover:text-danger transition-colors"
+            >
+              <X size={11} /> Clear
+            </button>
+          )}
+          <span className="ml-auto text-xs text-muted">{filtered.length} of {trades.length}</span>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <p className="p-4 text-sm text-muted">No trades match these filters.</p>

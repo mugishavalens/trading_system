@@ -211,6 +211,12 @@ class PositionResponse(BaseModel):
     take_profit: float | None = None
 
 
+class PositionUpdateRequest(BaseModel):
+    # Explicit null clears it — always send both fields, whatever the current values are.
+    stop_loss: float | None = Field(default=None, gt=0)
+    take_profit: float | None = Field(default=None, gt=0)
+
+
 class PortfolioResponse(BaseModel):
     cash_balance: float
     equity: float

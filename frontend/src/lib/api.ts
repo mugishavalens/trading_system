@@ -258,6 +258,17 @@ export const api = {
   portfolioHistory: (token: string) =>
     request<EquitySnapshot[]>("/api/portfolio/history", { token }),
 
+  updatePosition: (
+    token: string,
+    symbol: string,
+    payload: { stop_loss?: number | null; take_profit?: number | null }
+  ) =>
+    request<Position>(`/api/portfolio/positions/${encodeURIComponent(symbol)}`, {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(payload),
+    }),
+
   chat: (token: string, message: string, history: ChatMessage[]) =>
     request<ChatResponse>("/api/assistant/chat", {
       method: "POST",

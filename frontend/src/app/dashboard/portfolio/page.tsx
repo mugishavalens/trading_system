@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, EquitySnapshot, Portfolio, SymbolInfo, Trade } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import StatCard from "@/components/StatCard";
@@ -27,29 +27,47 @@ export default function PortfolioPage() {
     api.symbols().then(setSymbols);
   }, []);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!token) return;
+    const [p, h, t] = await Promise.all([
+      api.portfolio(token),
+      api.portfolioHistory(token),
+      api.tradeHistory(token, { symbol, side, date_from: dateFrom, date_to: dateTo }),
+    ]);
+    setPortfolio(p);
+    setHistory(h);
+    setTrades(t);
+  }, [token, symbol, side, dateFrom, dateTo]);
+
+  useEffect(() => {
     let cancelled = false;
-
-    async function refresh() {
-      const [p, h, t] = await Promise.all([
-        api.portfolio(token!),
-        api.portfolioHistory(token!),
-        api.tradeHistory(token!, { symbol, side, date_from: dateFrom, date_to: dateTo }),
-      ]);
+    async function run() {
       if (cancelled) return;
-      setPortfolio(p);
-      setHistory(h);
-      setTrades(t);
+      await refresh();
     }
-
-    refresh();
-    const id = setInterval(refresh, POLL_MS);
+    run();
+    const id = setInterval(run, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, symbol, side, dateFrom, dateTo]);
+  }, [refresh]);
+
+  async function handleClosePosition(sym: string, quantity: number) {
+    if (!token) return;
+    await api.executeTrade(token, { symbol: sym, side: "SELL", quantity });
+    await refresh();
+  }
+
+  async function handleUpdatePositionSlTp(
+    sym: string,
+    stopLoss: number | null,
+    takeProfit: number | null
+  ) {
+    if (!token) return;
+    await api.updatePosition(token, sym, { stop_loss: stopLoss, take_profit: takeProfit });
+    await refresh();
+  }
 
   const slices = [
     ...(portfolio?.positions.map((p) => ({
@@ -109,7 +127,11 @@ export default function PortfolioPage() {
         <div className="border-b border-border px-5 py-3 text-sm font-medium">
           Open Positions
         </div>
-        <PositionsTable positions={portfolio?.positions ?? []} />
+        <PositionsTable
+          positions={portfolio?.positions ?? []}
+          onClose={handleClosePosition}
+          onUpdateSlTp={handleUpdatePositionSlTp}
+        />
       </div>
 
       <div className="glass rounded-2xl">
@@ -124,7 +146,7 @@ export default function PortfolioPage() {
             onClear={() => { setSymbol(""); setSide(""); setDateFrom(""); setDateTo(""); }}
           />
         </div>
-        <TradeHistoryTable trades={trades} />
+        <TradeHistoryTable trades={trades} showFilters={false} />
       </div>
     </div>
   );

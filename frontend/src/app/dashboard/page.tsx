@@ -179,6 +179,22 @@ function DashboardContent() {
     await refreshOrders();
   }
 
+  async function handleClosePosition(symbol: string, quantity: number) {
+    if (!token) return;
+    await api.executeTrade(token, { symbol, side: "SELL", quantity });
+    await Promise.all([refreshAccount(), refreshUser()]);
+  }
+
+  async function handleUpdatePositionSlTp(
+    symbol: string,
+    stopLoss: number | null,
+    takeProfit: number | null
+  ) {
+    if (!token) return;
+    await api.updatePosition(token, symbol, { stop_loss: stopLoss, take_profit: takeProfit });
+    await refreshAccount();
+  }
+
   async function handleApprovePending(id: number, quantity?: number) {
     if (!token) return;
     setPendingBusyId(id);
@@ -449,7 +465,11 @@ function DashboardContent() {
             <div className="border-b border-border px-5 py-3 text-sm font-medium">
               Open Positions
             </div>
-            <PositionsTable positions={portfolio?.positions ?? []} />
+            <PositionsTable
+              positions={portfolio?.positions ?? []}
+              onClose={handleClosePosition}
+              onUpdateSlTp={handleUpdatePositionSlTp}
+            />
           </div>
 
           <div className="glass rounded-2xl">

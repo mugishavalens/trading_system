@@ -1,6 +1,6 @@
 import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -18,6 +18,7 @@ from ..schemas import (
     PortfolioResponse,
     PortfolioRiskResponse,
     PositionResponse,
+    PositionUpdateRequest,
 )
 from ..security import get_current_user
 
@@ -95,6 +96,52 @@ def get_portfolio(
         win_rate=round(win_rate, 1),
         risk_score=risk_score,
         positions=position_responses,
+    )
+
+
+@router.patch("/positions/{symbol:path}", response_model=PositionResponse)
+def update_position(
+    symbol: str,
+    payload: PositionUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add/change/clear stop-loss or take-profit on a position you already
+    hold — previously these could only be set at the moment you opened the
+    trade, with no way back in to adjust them."""
+    position = (
+        db.query(Position)
+        .filter(Position.user_id == current_user.id, Position.symbol == symbol)
+        .first()
+    )
+    if not position:
+        raise HTTPException(status_code=404, detail="No open position for this symbol")
+
+    current_price = market_store.get_last_price(symbol)
+    if payload.stop_loss is not None and payload.stop_loss >= current_price:
+        raise HTTPException(status_code=400, detail="Stop loss must be below the current price")
+    if payload.take_profit is not None and payload.take_profit <= current_price:
+        raise HTTPException(status_code=400, detail="Take profit must be above the current price")
+
+    position.stop_loss = payload.stop_loss
+    position.take_profit = payload.take_profit
+    db.commit()
+    db.refresh(position)
+
+    market_value = current_price * position.quantity
+    cost_basis = position.avg_entry_price * position.quantity
+    unrealized_pnl = market_value - cost_basis
+    unrealized_pnl_pct = (unrealized_pnl / cost_basis * 100) if cost_basis else 0.0
+
+    return PositionResponse(
+        symbol=position.symbol,
+        quantity=position.quantity,
+        avg_entry_price=position.avg_entry_price,
+        current_price=current_price,
+        unrealized_pnl=round(unrealized_pnl, 2),
+        unrealized_pnl_pct=round(unrealized_pnl_pct, 2),
+        stop_loss=position.stop_loss,
+        take_profit=position.take_profit,
     )
 
 
